@@ -91,6 +91,15 @@ export async function getDashboardStats(userId) {
 }
 
 // ══════════════════════════════════════════════════════════════
+//  BADGES / GAMIFICATION
+// ══════════════════════════════════════════════════════════════
+
+export async function getUserBadges(userId) {
+  const response = await api.get(`/badges/${userId}`);
+  return response.data;
+}
+
+// ══════════════════════════════════════════════════════════════
 //  CHAT
 // ══════════════════════════════════════════════════════════════
 

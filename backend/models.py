@@ -46,6 +46,7 @@ class User(Base):
     scans = relationship("Scan", back_populates="user", cascade="all, delete-orphan")
     tickets = relationship("Ticket", back_populates="user", cascade="all, delete-orphan")
     chat_histories = relationship("ChatHistory", back_populates="user", cascade="all, delete-orphan")
+    badges = relationship("UserBadge", back_populates="user", cascade="all, delete-orphan")
 
 
 # ── Scans ──────────────────────────────────────────────────────
@@ -97,6 +98,39 @@ class ScanFinding(Base):
     fix = Column(Text, default="")
 
     scan = relationship("Scan", back_populates="findings")
+
+
+# ── Badges (Gamification) ─────────────────────────────────────
+
+class Badge(Base):
+    __tablename__ = "badges"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    slug = Column(String, unique=True, nullable=False, index=True)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=False)
+    icon = Column(String, default="🏅")
+    category = Column(String, nullable=False)       # fix, score, streak, surface, milestone
+    surface = Column(String, default="any")          # any, website, app, repo
+    threshold = Column(Integer, default=0)           # numeric threshold (e.g. score >= 75)
+    color = Column(String, default="#6c5ce7")        # accent color for display
+    sort_order = Column(Integer, default=0)
+
+    user_badges = relationship("UserBadge", back_populates="badge")
+
+
+class UserBadge(Base):
+    __tablename__ = "user_badges"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    badge_id = Column(String, ForeignKey("badges.id"), nullable=False, index=True)
+    scan_id = Column(String, ForeignKey("scans.id"), nullable=True)
+    earned_at = Column(DateTime, default=utcnow)
+
+    user = relationship("User", back_populates="badges")
+    badge = relationship("Badge", back_populates="user_badges")
+    scan = relationship("Scan")
 
 
 # ── Support Tickets ────────────────────────────────────────────

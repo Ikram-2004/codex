@@ -31,5 +31,5 @@ def get_db():
 
 def init_db():
     """Create all tables if they don't exist yet."""
-    from models import User, Scan, ScanFinding, Ticket, ChatHistory  # noqa: F401
+    from models import User, Scan, ScanFinding, Ticket, ChatHistory, Badge, UserBadge  # noqa: F401
     Base.metadata.create_all(bind=engine)

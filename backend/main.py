@@ -40,6 +40,13 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     init_db()
+    # Seed badge catalog on first run
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        crud.seed_badges(db)
+    finally:
+        db.close()
 
 # ── Global SSE event queue ─────────────────────────────────────
 event_queue: asyncio.Queue = asyncio.Queue(maxsize=500)
@@ -423,11 +430,20 @@ def run_scan(request: ScanRequest, db: Session = Depends(get_db)):
         findings=all_findings,
     )
 
+    # ── Evaluate badges after scan ─────────────────────────
+    new_badges = []
+    if request.user_id:
+        try:
+            new_badges = crud.evaluate_badges(db, request.user_id, scan_record)
+        except Exception as badge_err:
+            print(f"Badge evaluation error: {badge_err}")
+
     return {
         "scan_id": scan_record.id,
         "final": final,
         "scores": scores_dict,
         "findings": all_findings,
+        "new_badges": new_badges,
     }
 
 
@@ -456,6 +472,14 @@ def dashboard_stats(user_id: str, db: Session = Depends(get_db)):
     """Get aggregated dashboard statistics for a user."""
     stats = crud.get_dashboard_stats(db, user_id)
     return stats
+
+
+# ── Badge / Gamification ───────────────────────────────────────
+
+@app.get("/badges/{user_id}")
+def user_badges(user_id: str, db: Session = Depends(get_db)):
+    """Get all badges (earned + locked) for a user."""
+    return crud.get_user_badges(db, user_id)
 
 
 # ══════════════════════════════════════════════════════════════

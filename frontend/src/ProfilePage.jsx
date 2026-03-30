@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getUserProfile, getScanHistory, getDashboardStats, getUserTickets, getChatHistory, updateUserProfile } from './api';
+import { getUserProfile, getScanHistory, getDashboardStats, getUserTickets, getChatHistory, updateUserProfile, getUserBadges } from './api';
 
 // ── colour tokens (CSS custom props from App.jsx) ──────────────
 const C = {
@@ -228,6 +228,7 @@ export default function ProfilePage({ user, userPreferences, onLogout, setPage, 
   const [scanHistory, setScanHistory] = useState([]);
   const [tickets, setTickets] = useState([]);
   const [chatCount, setChatCount] = useState(0);
+  const [badges, setBadges] = useState({ earned: [], locked: [], total_earned: 0, total: 0 });
   const [loadingData, setLoadingData] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [mounted, setMounted] = useState(false);
@@ -253,18 +254,20 @@ export default function ProfilePage({ user, userPreferences, onLogout, setPage, 
   async function loadProfileData() {
     setLoadingData(true);
     try {
-      const [profileData, statsData, historyData, ticketData, chatData] = await Promise.allSettled([
+      const [profileData, statsData, historyData, ticketData, chatData, badgeData] = await Promise.allSettled([
         getUserProfile(user.id),
         getDashboardStats(user.id),
         getScanHistory(user.id),
         getUserTickets(user.id),
         getChatHistory(user.id),
+        getUserBadges(user.id),
       ]);
       if (profileData.status === 'fulfilled') setProfile(profileData.value);
       if (statsData.status === 'fulfilled') setStats(statsData.value);
       if (historyData.status === 'fulfilled') setScanHistory(historyData.value.scans || []);
       if (ticketData.status === 'fulfilled') setTickets(ticketData.value.tickets || []);
       if (chatData.status === 'fulfilled') setChatCount((chatData.value.messages || []).length);
+      if (badgeData.status === 'fulfilled') setBadges(badgeData.value);
     } catch (err) {
       console.error('Profile load error:', err);
     }
@@ -314,6 +317,7 @@ export default function ProfilePage({ user, userPreferences, onLogout, setPage, 
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
+    { id: 'badges', label: `Badges (${badges.total_earned}/${badges.total})` },
     { id: 'scans', label: 'Scan History' },
     { id: 'tickets', label: 'Tickets' },
     { id: 'preferences', label: 'Preferences' },
@@ -509,8 +513,8 @@ export default function ProfilePage({ user, userPreferences, onLogout, setPage, 
               color="#6c5ce7" bgColor="rgba(108,92,231,0.12)" sub="Security assessments" />
             <StatCard icon={<Icons.TrendUp />} label="Avg Score" value={stats?.avg_score || 0}
               color="#00b894" bgColor="rgba(0,184,148,0.12)" sub="Across all scans" />
-            <StatCard icon={<Icons.Award />} label="Best Grade" value={stats?.best_grade || '-'}
-              color="#fdcb6e" bgColor="rgba(253,203,110,0.12)" sub="Highest achieved" />
+            <StatCard icon={<Icons.Award />} label="Badges Earned" value={badges.total_earned || 0}
+              color="#fdcb6e" bgColor="rgba(253,203,110,0.12)" sub={`of ${badges.total} total`} />
             <StatCard icon={<Icons.AlertCircle />} label="Critical Issues" value={stats?.critical_total || 0}
               color="#d63031" bgColor="rgba(214,48,49,0.12)" sub="Needs attention" />
           </div>
@@ -769,6 +773,221 @@ export default function ProfilePage({ user, userPreferences, onLogout, setPage, 
                 </div>
               );
             })
+          )}
+        </div>
+      )}
+
+      {/* ── Badges Tab ── */}
+      {!loadingData && activeTab === 'badges' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* Badge Progress Bar */}
+          <div style={{
+            background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12,
+            padding: 24,
+          }}>
+            <div style={{ ...flex('row', 'center', 'space-between', 0), marginBottom: 14 }}>
+              <div>
+                <div style={{ color: C.textPrimary, fontSize: 16, fontWeight: 700, marginBottom: 2 }}>Badge Collection</div>
+                <div style={{ color: C.textSecondary, fontSize: 12 }}>
+                  {badges.total_earned} of {badges.total} badges earned — {badges.total > 0 ? Math.round((badges.total_earned / badges.total) * 100) : 0}% complete
+                </div>
+              </div>
+              <div style={{
+                padding: '6px 14px', borderRadius: 20,
+                background: badges.total_earned >= 10 ? 'linear-gradient(135deg, rgba(253,203,110,0.2), rgba(232,67,147,0.15))'
+                  : badges.total_earned >= 5 ? C.greenSoft : C.accentSoft,
+                border: `1px solid ${badges.total_earned >= 10 ? 'rgba(253,203,110,0.3)' : badges.total_earned >= 5 ? 'rgba(0,184,148,0.2)' : 'rgba(108,92,231,0.2)'}`,
+                color: badges.total_earned >= 10 ? '#fdcb6e' : badges.total_earned >= 5 ? C.green : C.accent,
+                fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em',
+              }}>
+                {badges.total_earned >= 10 ? '👑 Legend' : badges.total_earned >= 5 ? '🔥 Expert' : badges.total_earned >= 1 ? '⭐ Starter' : '🔒 Newcomer'}
+              </div>
+            </div>
+            {/* Progress bar */}
+            <div style={{
+              height: 8, borderRadius: 4, background: C.bg, overflow: 'hidden',
+              border: `1px solid ${C.border}`,
+            }}>
+              <div style={{
+                height: '100%', borderRadius: 4,
+                width: `${badges.total > 0 ? (badges.total_earned / badges.total) * 100 : 0}%`,
+                background: 'linear-gradient(90deg, #6c5ce7, #e84393, #fdcb6e)',
+                transition: 'width 1s ease',
+              }} />
+            </div>
+          </div>
+
+          {/* Earned Badges */}
+          {badges.earned.length > 0 && (
+            <div>
+              <div style={{
+                color: C.textSecondary, fontSize: 11, fontWeight: 700,
+                textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14,
+                ...flex('row', 'center', 'flex-start', 8),
+              }}>
+                <Icons.Award /> Earned Badges
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+                {badges.earned.map((badge) => {
+                  const earnedDate = badge.earned_at
+                    ? new Date(badge.earned_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+                    : '';
+                  return (
+                    <div
+                      key={badge.slug}
+                      style={{
+                        background: C.bgCard, borderRadius: 14, padding: 20, position: 'relative',
+                        overflow: 'hidden', cursor: 'default',
+                        border: `1px solid ${badge.color}33`,
+                        boxShadow: `0 4px 20px ${badge.color}15`,
+                        transition: 'all 0.3s ease',
+                      }}
+                      onMouseEnter={e => {
+                        e.currentTarget.style.transform = 'translateY(-3px)';
+                        e.currentTarget.style.boxShadow = `0 8px 32px ${badge.color}25`;
+                        e.currentTarget.style.borderColor = `${badge.color}55`;
+                      }}
+                      onMouseLeave={e => {
+                        e.currentTarget.style.transform = 'translateY(0)';
+                        e.currentTarget.style.boxShadow = `0 4px 20px ${badge.color}15`;
+                        e.currentTarget.style.borderColor = `${badge.color}33`;
+                      }}
+                    >
+                      {/* Glow orb */}
+                      <div style={{
+                        position: 'absolute', top: -15, right: -15, width: 70, height: 70,
+                        borderRadius: '50%', background: badge.color, opacity: 0.08, filter: 'blur(20px)',
+                      }} />
+                      {/* Shimmer bar */}
+                      <div style={{
+                        position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                        background: `linear-gradient(90deg, transparent, ${badge.color}66, transparent)`,
+                      }} />
+                      <div style={{ ...flex('row', 'flex-start', 'flex-start', 14), position: 'relative' }}>
+                        <div style={{
+                          width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+                          background: `${badge.color}18`,
+                          border: `1px solid ${badge.color}30`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 24,
+                        }}>
+                          {badge.icon}
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ color: C.textPrimary, fontSize: 14, fontWeight: 700, marginBottom: 3 }}>
+                            {badge.name}
+                          </div>
+                          <div style={{ color: C.textSecondary, fontSize: 11, lineHeight: 1.4, marginBottom: 6 }}>
+                            {badge.description}
+                          </div>
+                          <div style={{ ...flex('row', 'center', 'flex-start', 8) }}>
+                            <span style={{
+                              padding: '2px 8px', borderRadius: 4,
+                              background: `${badge.color}15`, color: badge.color,
+                              fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                            }}>
+                              {badge.category}
+                            </span>
+                            {earnedDate && (
+                              <span style={{ color: C.textMuted, fontSize: 10, ...flex('row', 'center', 'flex-start', 4) }}>
+                                <Icons.Clock /> {earnedDate}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Locked Badges */}
+          {badges.locked.length > 0 && (
+            <div>
+              <div style={{
+                color: C.textMuted, fontSize: 11, fontWeight: 700,
+                textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 14,
+                ...flex('row', 'center', 'flex-start', 8),
+              }}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                Locked — Keep scanning to unlock!
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
+                {badges.locked.map((badge) => (
+                  <div
+                    key={badge.slug}
+                    style={{
+                      background: C.bgCard, borderRadius: 14, padding: 20, position: 'relative',
+                      overflow: 'hidden', opacity: 0.55,
+                      border: `1px solid ${C.border}`,
+                      transition: 'all 0.3s ease',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.opacity = '0.8';
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.opacity = '0.55';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                    }}
+                  >
+                    {/* Lock overlay */}
+                    <div style={{
+                      position: 'absolute', top: 12, right: 12, zIndex: 2,
+                      width: 22, height: 22, borderRadius: 6,
+                      background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                    </div>
+                    <div style={{ ...flex('row', 'flex-start', 'flex-start', 14), position: 'relative' }}>
+                      <div style={{
+                        width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+                        background: C.bg, border: `1px solid ${C.border}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 24, filter: 'grayscale(100%)',
+                      }}>
+                        {badge.icon}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ color: C.textSecondary, fontSize: 14, fontWeight: 700, marginBottom: 3 }}>
+                          {badge.name}
+                        </div>
+                        <div style={{ color: C.textMuted, fontSize: 11, lineHeight: 1.4, marginBottom: 6 }}>
+                          {badge.description}
+                        </div>
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 4,
+                          background: C.bg, color: C.textMuted,
+                          fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+                          border: `1px solid ${C.border}`,
+                        }}>
+                          {badge.category}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Empty state */}
+          {badges.total === 0 && (
+            <div style={{
+              background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 12,
+              padding: 40, textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🏆</div>
+              <div style={{ color: C.textPrimary, fontSize: 16, fontWeight: 600, marginBottom: 6 }}>No badges available yet</div>
+              <div style={{ color: C.textSecondary, fontSize: 13 }}>Run security scans and fix issues to start earning badges!</div>
+            </div>
           )}
         </div>
       )}

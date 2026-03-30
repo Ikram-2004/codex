@@ -8,7 +8,7 @@ import hashlib
 import secrets
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
-from models import User, Scan, ScanFinding, Ticket, ChatHistory
+from models import User, Scan, ScanFinding, Ticket, ChatHistory, Badge, UserBadge
 
 
 def utcnow():
@@ -412,4 +412,254 @@ def get_dashboard_stats(db: Session, user_id: str) -> dict:
         "critical_total": critical_total,
         "high_total": high_total,
         "score_trend": score_trend,
+    }
+
+
+# ══════════════════════════════════════════════════════════════
+#  GAMIFICATION / BADGES CRUD
+# ══════════════════════════════════════════════════════════════
+
+BADGE_CATALOG = [
+    # ── Fix badges ──────────────────────────────────────────────
+    {"slug": "first_blood",        "name": "First Blood",        "description": "Fix at least 1 issue on a re-scan",                    "icon": "🗡️",  "category": "fix",       "surface": "any",     "threshold": 1,   "color": "#e84393", "sort_order": 1},
+    {"slug": "bug_squasher",       "name": "Bug Squasher",       "description": "Fix 5+ issues in a single re-scan",                   "icon": "🐛",  "category": "fix",       "surface": "any",     "threshold": 5,   "color": "#00b894", "sort_order": 2},
+    {"slug": "clean_sweep",        "name": "Clean Sweep",        "description": "Reduce all findings to zero on a re-scan",             "icon": "🧹",  "category": "fix",       "surface": "any",     "threshold": 0,   "color": "#00cec9", "sort_order": 3},
+    {"slug": "critical_eliminator","name": "Critical Eliminator","description": "Remove all critical findings from a scan",              "icon": "💀",  "category": "fix",       "surface": "any",     "threshold": 0,   "color": "#d63031", "sort_order": 4},
+    {"slug": "high_risk_hunter",   "name": "High Risk Hunter",   "description": "Remove all high-severity findings from a scan",        "icon": "🎯",  "category": "fix",       "surface": "any",     "threshold": 0,   "color": "#ffa502", "sort_order": 5},
+    # ── Score badges ────────────────────────────────────────────
+    {"slug": "rising_star",        "name": "Rising Star",        "description": "Reach a security score of 50 or above",                "icon": "⭐",  "category": "score",     "surface": "any",     "threshold": 50,  "color": "#fdcb6e", "sort_order": 6},
+    {"slug": "security_pro",       "name": "Security Pro",       "description": "Reach a security score of 75 or above",                "icon": "🛡️",  "category": "score",     "surface": "any",     "threshold": 75,  "color": "#6c5ce7", "sort_order": 7},
+    {"slug": "fortress_builder",   "name": "Fortress Builder",   "description": "Reach a security score of 90 or above",                "icon": "🏰",  "category": "score",     "surface": "any",     "threshold": 90,  "color": "#0984e3", "sort_order": 8},
+    {"slug": "perfect_score",      "name": "Perfect Score",      "description": "Achieve a perfect security score of 100",              "icon": "💯",  "category": "score",     "surface": "any",     "threshold": 100, "color": "#00b894", "sort_order": 9},
+    {"slug": "comeback_kid",       "name": "Comeback Kid",       "description": "Improve your score by 20+ points in one re-scan",      "icon": "🔄",  "category": "score",     "surface": "any",     "threshold": 20,  "color": "#e17055", "sort_order": 10},
+    # ── Streak badges ───────────────────────────────────────────
+    {"slug": "improving",          "name": "Improving",          "description": "3 consecutive scans with improving scores",            "icon": "📈",  "category": "streak",    "surface": "any",     "threshold": 3,   "color": "#00cec9", "sort_order": 11},
+    {"slug": "on_fire",            "name": "On Fire",            "description": "5 consecutive scans with improving scores",            "icon": "🔥",  "category": "streak",    "surface": "any",     "threshold": 5,   "color": "#ff7675", "sort_order": 12},
+    # ── Surface badges ──────────────────────────────────────────
+    {"slug": "web_guardian",       "name": "Web Guardian",       "description": "Reach score ≥ 75 on a website scan",                   "icon": "🌐",  "category": "surface",   "surface": "website", "threshold": 75,  "color": "#0984e3", "sort_order": 13},
+    {"slug": "app_defender",       "name": "App Defender",       "description": "Reach score ≥ 75 on an application scan",              "icon": "📱",  "category": "surface",   "surface": "app",     "threshold": 75,  "color": "#6c5ce7", "sort_order": 14},
+    {"slug": "code_sentinel",      "name": "Code Sentinel",      "description": "Reach score ≥ 75 on a repository scan",                "icon": "💻",  "category": "surface",   "surface": "repo",    "threshold": 75,  "color": "#e84393", "sort_order": 15},
+    {"slug": "triple_shield",      "name": "Triple Shield",      "description": "Earn Web Guardian, App Defender & Code Sentinel",      "icon": "🏆",  "category": "surface",   "surface": "any",     "threshold": 3,   "color": "#fdcb6e", "sort_order": 16},
+    # ── Milestone badges ────────────────────────────────────────
+    {"slug": "security_champion",  "name": "Security Champion",  "description": "Earn 10 or more badges — you're a legend!",            "icon": "👑",  "category": "milestone", "surface": "any",     "threshold": 10,  "color": "#fdcb6e", "sort_order": 17},
+]
+
+
+def seed_badges(db: Session) -> None:
+    """Insert badge catalog if not already seeded (idempotent)."""
+    existing = db.query(Badge).count()
+    if existing >= len(BADGE_CATALOG):
+        return  # already seeded
+
+    for b in BADGE_CATALOG:
+        exists = db.query(Badge).filter(Badge.slug == b["slug"]).first()
+        if not exists:
+            badge = Badge(**b)
+            db.add(badge)
+    db.commit()
+
+
+def _user_has_badge(db: Session, user_id: str, slug: str) -> bool:
+    """Check if user already has a specific badge."""
+    return (
+        db.query(UserBadge)
+        .join(Badge)
+        .filter(UserBadge.user_id == user_id, Badge.slug == slug)
+        .first()
+    ) is not None
+
+
+def _award_badge(db: Session, user_id: str, slug: str, scan_id: str | None = None) -> dict | None:
+    """Award a badge to a user. Returns badge info dict or None if already owned."""
+    if _user_has_badge(db, user_id, slug):
+        return None
+
+    badge = db.query(Badge).filter(Badge.slug == slug).first()
+    if not badge:
+        return None
+
+    ub = UserBadge(user_id=user_id, badge_id=badge.id, scan_id=scan_id)
+    db.add(ub)
+    db.flush()
+    return {
+        "slug": badge.slug,
+        "name": badge.name,
+        "description": badge.description,
+        "icon": badge.icon,
+        "category": badge.category,
+        "color": badge.color,
+    }
+
+
+def evaluate_badges(db: Session, user_id: str, current_scan: Scan) -> list[dict]:
+    """
+    Compare the current scan against previous scans for the same target(s).
+    Award any newly-earned badges. Returns a list of newly awarded badge dicts.
+    """
+    if not user_id:
+        return []
+
+    newly_earned: list[dict] = []
+    scan_id = current_scan.id
+    score = current_scan.final_score
+
+    # ── Find previous scan for the same target(s) ──────────────
+    prev_scan = None
+    q = db.query(Scan).filter(
+        Scan.user_id == user_id,
+        Scan.id != current_scan.id,
+    )
+    # Match by any overlapping URL
+    from sqlalchemy import or_
+    url_filters = []
+    if current_scan.website_url:
+        url_filters.append(Scan.website_url == current_scan.website_url)
+    if current_scan.app_url:
+        url_filters.append(Scan.app_url == current_scan.app_url)
+    if current_scan.repo_url:
+        url_filters.append(Scan.repo_url == current_scan.repo_url)
+
+    if url_filters:
+        prev_scan = (
+            q.filter(or_(*url_filters))
+            .order_by(Scan.scan_date.desc())
+            .first()
+        )
+
+    # ── Fix badges (require a previous scan to compare) ────────
+    if prev_scan:
+        prev_issues = prev_scan.critical_count + prev_scan.high_count + prev_scan.medium_count
+        curr_issues = current_scan.critical_count + current_scan.high_count + current_scan.medium_count
+        fixed_count = max(0, prev_issues - curr_issues)
+
+        if fixed_count >= 1:
+            b = _award_badge(db, user_id, "first_blood", scan_id)
+            if b: newly_earned.append(b)
+
+        if fixed_count >= 5:
+            b = _award_badge(db, user_id, "bug_squasher", scan_id)
+            if b: newly_earned.append(b)
+
+        if curr_issues == 0 and prev_issues > 0:
+            b = _award_badge(db, user_id, "clean_sweep", scan_id)
+            if b: newly_earned.append(b)
+
+        if prev_scan.critical_count > 0 and current_scan.critical_count == 0:
+            b = _award_badge(db, user_id, "critical_eliminator", scan_id)
+            if b: newly_earned.append(b)
+
+        if prev_scan.high_count > 0 and current_scan.high_count == 0:
+            b = _award_badge(db, user_id, "high_risk_hunter", scan_id)
+            if b: newly_earned.append(b)
+
+        if score - prev_scan.final_score >= 20:
+            b = _award_badge(db, user_id, "comeback_kid", scan_id)
+            if b: newly_earned.append(b)
+
+    # ── Score badges (absolute thresholds) ─────────────────────
+    score_badges = [
+        (50,  "rising_star"),
+        (75,  "security_pro"),
+        (90,  "fortress_builder"),
+        (100, "perfect_score"),
+    ]
+    for threshold, slug in score_badges:
+        if score >= threshold:
+            b = _award_badge(db, user_id, slug, scan_id)
+            if b: newly_earned.append(b)
+
+    # ── Surface-specific score badges ──────────────────────────
+    if current_scan.website_score is not None and current_scan.website_score >= 75:
+        b = _award_badge(db, user_id, "web_guardian", scan_id)
+        if b: newly_earned.append(b)
+
+    if current_scan.app_score is not None and current_scan.app_score >= 75:
+        b = _award_badge(db, user_id, "app_defender", scan_id)
+        if b: newly_earned.append(b)
+
+    if current_scan.code_score is not None and current_scan.code_score >= 75:
+        b = _award_badge(db, user_id, "code_sentinel", scan_id)
+        if b: newly_earned.append(b)
+
+    # Triple Shield — all three surface badges
+    surface_slugs = ["web_guardian", "app_defender", "code_sentinel"]
+    if all(_user_has_badge(db, user_id, s) for s in surface_slugs):
+        b = _award_badge(db, user_id, "triple_shield", scan_id)
+        if b: newly_earned.append(b)
+
+    # ── Streak badges ──────────────────────────────────────────
+    user_scans = (
+        db.query(Scan)
+        .filter(Scan.user_id == user_id)
+        .order_by(Scan.scan_date.desc())
+        .limit(10)
+        .all()
+    )
+    if len(user_scans) >= 3:
+        streak = 1
+        for i in range(len(user_scans) - 1):
+            if user_scans[i].final_score > user_scans[i + 1].final_score:
+                streak += 1
+            else:
+                break
+        if streak >= 3:
+            b = _award_badge(db, user_id, "improving", scan_id)
+            if b: newly_earned.append(b)
+        if streak >= 5:
+            b = _award_badge(db, user_id, "on_fire", scan_id)
+            if b: newly_earned.append(b)
+
+    # ── Security Champion — 10+ badges earned ──────────────────
+    total_badges = db.query(UserBadge).filter(UserBadge.user_id == user_id).count()
+    if total_badges >= 10:
+        b = _award_badge(db, user_id, "security_champion", scan_id)
+        if b: newly_earned.append(b)
+
+    db.commit()
+    return newly_earned
+
+
+def get_user_badges(db: Session, user_id: str) -> dict:
+    """
+    Return all badges with earned status for a user.
+    Returns {earned: [...], locked: [...], total_earned: int, total: int}
+    """
+    all_badges = db.query(Badge).order_by(Badge.sort_order).all()
+    earned_map = {}
+    user_badges = (
+        db.query(UserBadge)
+        .filter(UserBadge.user_id == user_id)
+        .all()
+    )
+    for ub in user_badges:
+        earned_map[ub.badge_id] = ub
+
+    earned = []
+    locked = []
+    for badge in all_badges:
+        info = {
+            "slug": badge.slug,
+            "name": badge.name,
+            "description": badge.description,
+            "icon": badge.icon,
+            "category": badge.category,
+            "surface": badge.surface,
+            "color": badge.color,
+            "sort_order": badge.sort_order,
+        }
+        if badge.id in earned_map:
+            ub = earned_map[badge.id]
+            info["earned"] = True
+            info["earned_at"] = ub.earned_at.isoformat() if ub.earned_at else ""
+            info["scan_id"] = ub.scan_id
+            earned.append(info)
+        else:
+            info["earned"] = False
+            locked.append(info)
+
+    return {
+        "earned": earned,
+        "locked": locked,
+        "total_earned": len(earned),
+        "total": len(all_badges),
     }
