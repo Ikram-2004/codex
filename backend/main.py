@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from website_scanner import scan_website
+from zap_scanner import scan_website_zap
 from app_scanner import scan_app
 from code_scanner import scan_codebase
 from scorer import calculate_final_score
@@ -32,10 +33,19 @@ event_queue: asyncio.Queue = asyncio.Queue(maxsize=500)
 
 # ── Request models ─────────────────────────────────────────────
 
+class UserPreferences(BaseModel):
+    project_type: str = ""
+    security_concern: str = ""
+    experience_level: str = ""
+    detail_level: str = ""
+    deployment_env: str = ""
+
 class ScanRequest(BaseModel):
     website_url: str = ""
     app_url: str = ""
     repo_url: str = ""
+    scanner_type: str = "python"   # "python" | "zap"
+    user_preferences: Optional[UserPreferences] = None
 
 class ChatMessage(BaseModel):
     role: str
@@ -44,6 +54,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     scan_context: Optional[dict] = None
+    user_preferences: Optional[UserPreferences] = None
 
 class TicketRequest(BaseModel):
     name: str
@@ -190,7 +201,20 @@ def run_scan(request: ScanRequest):
     code_score = None
 
     if is_valid_url(request.website_url):
-        result = scan_website(request.website_url)
+        if request.scanner_type == "zap":
+            try:
+                result = scan_website_zap(request.website_url)
+            except Exception as zap_err:
+                # Fallback to Python scanner if ZAP fails
+                result = scan_website(request.website_url)
+                result["findings"].insert(0, {
+                    "severity": "INFO",
+                    "surface": "Website",
+                    "title": f"ZAP scanner unavailable, fell back to Python scanner ({str(zap_err)[:80]})",
+                    "fix": "Make sure OWASP ZAP is running and configured in your .env file",
+                })
+        else:
+            result = scan_website(request.website_url)
         website_score = result["score"]
         all_findings.extend(result["findings"])
 
@@ -232,7 +256,18 @@ def run_scan(request: ScanRequest):
 async def chat(request: ChatRequest):
     try:
         messages = [{"role": m.role, "content": m.content} for m in request.messages]
-        response_text = await get_chat_response(messages, request.scan_context)
+        # Build preferences context for personalization
+        prefs_context = None
+        if request.user_preferences:
+            p = request.user_preferences
+            prefs_context = {
+                "project_type": p.project_type,
+                "security_concern": p.security_concern,
+                "experience_level": p.experience_level,
+                "detail_level": p.detail_level,
+                "deployment_env": p.deployment_env,
+            }
+        response_text = await get_chat_response(messages, request.scan_context, prefs_context)
         return {"response": response_text, "success": True}
     except Exception as e:
         error_msg = str(e)

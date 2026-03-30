@@ -3,6 +3,7 @@ import { runScan } from './api';
 import { generatePDFReport } from './generateReport';
 import SupportPage from './SupportPage';
 import AuthPage from './AuthPage';
+import QuestionnairePage from './QuestionnairePage';
 
 
 // ── colour tokens ──────────────────────────────────────────────
@@ -340,7 +341,7 @@ function ThreatGauge({ pct = 74 }) {
 }
 
 // ── AI Chat Panel ──────────────────────────────────────────────
-function AIAssistant({ results }) {
+function AIAssistant({ results, userPreferences }) {
   const [messages, setMessages] = useState([
     { from: 'bot', text: results
         ? `Good morning, Sentinel. I've analyzed your recent scan. The score is ${results.final.score}/100 with grade ${results.final.grade}. ${results.final.message}.`
@@ -362,21 +363,25 @@ function AIAssistant({ results }) {
     setMessages(updatedMessages);
     setIsLoading(true);
     try {
+      const chatBody = {
+        messages: updatedMessages.map(m => ({
+          role: m.from === 'bot' ? 'assistant' : 'user',
+          content: m.text,
+        })),
+        scan_context: results ? {
+          score: results.final.score,
+          grade: results.final.grade,
+          issues: results.findings.filter(f => f.severity !== 'PASS').map(f => f.title),
+          passes: results.findings.filter(f => f.severity === 'PASS').map(f => f.title),
+        } : null,
+      };
+      if (userPreferences) {
+        chatBody.user_preferences = userPreferences;
+      }
       const res = await fetch('http://localhost:8000/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: updatedMessages.map(m => ({
-            role: m.from === 'bot' ? 'assistant' : 'user',
-            content: m.text,
-          })),
-          scan_context: results ? {
-            score: results.final.score,
-            grade: results.final.grade,
-            issues: results.findings.filter(f => f.severity !== 'PASS').map(f => f.title),
-            passes: results.findings.filter(f => f.severity === 'PASS').map(f => f.title),
-          } : null,
-        }),
+        body: JSON.stringify(chatBody),
       });
       const data = await res.json();
       setMessages(m => [...m, { from: 'bot', text: data.response }]);
@@ -487,7 +492,7 @@ function AIAssistant({ results }) {
 }
 
 // ── Dashboard Page ─────────────────────────────────────────────
-function DashboardPage({ results, setPage }) {
+function DashboardPage({ results, setPage, userPreferences }) {
   const recentScans = results ? [
     { name: results.scores.website !== null ? 'Website Scan' : null, status: results.final.grade === 'A' ? 'PASSED' : results.final.grade === 'F' ? 'FAILED' : 'WARNING', critical: results.findings.filter(f=>f.severity==='CRITICAL' && f.surface==='Website').length, warning: results.findings.filter(f=>f.severity==='MEDIUM' && f.surface==='Website').length, ago: 'Just now' },
     { name: results.scores.app !== null ? 'App Scan' : null, status: (results.scores.app||0) >= 70 ? 'PASSED' : (results.scores.app||0) >= 40 ? 'WARNING' : 'FAILED', critical: results.findings.filter(f=>f.severity==='CRITICAL'&&f.surface==='Application').length, warning: results.findings.filter(f=>f.severity==='MEDIUM'&&f.surface==='Application').length, ago: 'Just now' },
@@ -595,7 +600,7 @@ function DashboardPage({ results, setPage }) {
       </div>
 
       <div style={{ flexShrink:0 }}>
-        <AIAssistant results={results} />
+        <AIAssistant results={results} userPreferences={userPreferences} />
       </div>
     </div>
   );
@@ -606,6 +611,12 @@ function ScanInputPage({ onScan, loading, error }) {
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [appUrl, setAppUrl] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
+  const [scannerType, setScannerType] = useState('python');
+
+  const scannerOptions = [
+    { id: 'python', label: 'Python Scanner', icon: '🐍', desc: 'Fast, lightweight custom checks' },
+    { id: 'zap', label: 'OWASP ZAP', icon: '🔬', desc: 'Deep scan via ZAP API' },
+  ];
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding: 40, gap:32 }}>
@@ -632,12 +643,66 @@ function ScanInputPage({ onScan, loading, error }) {
             </div>
           );
         })}
+        {/* ── Scanner Type Selector ─────────────────────────── */}
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ display:'block', color:C.textSecondary, fontSize:12, marginBottom:10, fontWeight:600, letterSpacing:'0.04em', textTransform:'uppercase' }}>Website Scanner Engine</label>
+          <div style={{ display:'flex', gap:10 }}>
+            {scannerOptions.map(opt => {
+              const active = scannerType === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setScannerType(opt.id)}
+                  style={{
+                    flex:1, padding:'14px 12px', borderRadius:10,
+                    background: active
+                      ? `linear-gradient(135deg, rgba(108,92,231,0.15), rgba(232,67,147,0.06))`
+                      : 'rgba(255,255,255,0.03)',
+                    border: `1.5px solid ${active ? C.accent : C.border}`,
+                    cursor:'pointer', transition:'all 0.2s',
+                    display:'flex', flexDirection:'column', alignItems:'center', gap:6,
+                    position:'relative',
+                  }}
+                >
+                  {active && (
+                    <div style={{
+                      position:'absolute', top:6, right:6,
+                      width:16, height:16, borderRadius:'50%',
+                      background:C.accent,
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                    }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </div>
+                  )}
+                  <span style={{ fontSize:22 }}>{opt.icon}</span>
+                  <span style={{ color: active ? C.accent : C.textPrimary, fontSize:13, fontWeight:600 }}>{opt.label}</span>
+                  <span style={{ color: C.textSecondary, fontSize:10 }}>{opt.desc}</span>
+                </button>
+              );
+            })}
+          </div>
+          {scannerType === 'zap' && (
+            <div style={{
+              marginTop:8, padding:'6px 10px', borderRadius:6,
+              background:'rgba(108,92,231,0.08)', border:`1px solid rgba(108,92,231,0.15)`,
+              color:C.textSecondary, fontSize:11,
+              display:'flex', alignItems:'center', gap:6,
+            }}>
+              <span style={{ color:C.accent }}>ℹ</span>
+              Requires OWASP ZAP daemon running on localhost:8080
+            </div>
+          )}
+        </div>
+
         {error && (
           <div style={{ marginBottom:16, padding:'10px 14px', borderRadius:8, background:'rgba(255,71,87,0.1)', border:'1px solid rgba(255,71,87,0.25)', color:'#ff4757', fontSize:13 }}>
             {error}
           </div>
         )}
-        <button onClick={() => onScan(websiteUrl, appUrl, repoUrl)} disabled={loading} style={{
+        <button onClick={() => onScan(websiteUrl, appUrl, repoUrl, scannerType)} disabled={loading} style={{
           width:'100%', padding:'13px', borderRadius:8,
           background: loading ? C.textMuted : `linear-gradient(135deg, ${C.accent}, #8b7cf8)`,
           border:'none', color:'#fff', fontSize:15, fontWeight:600,
@@ -647,9 +712,13 @@ function ScanInputPage({ onScan, loading, error }) {
           {loading ? (
             <span style={{ ...flex('row','center','center',8) }}>
               <span style={{ animation:'spin 1s linear infinite', display:'inline-block' }}>⟳</span>
-              Scanning... (~30 seconds)
+              {scannerType === 'zap' ? 'ZAP Scanning... (~2 minutes)' : 'Scanning... (~30 seconds)'}
             </span>
-          ) : 'Run Security Scan'}
+          ) : (
+            <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              {scannerType === 'zap' ? '🔬' : '🐍'} Run Security Scan
+            </span>
+          )}
         </button>
       </div>
     </div>
@@ -1063,22 +1132,45 @@ function LogsPage({ results }) {
 // ── Root App ───────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
+  const [userPreferences, setUserPreferences] = useState(null);
   const [page, setPage] = useState('dashboard');
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Restore preferences from sessionStorage on mount
+  useEffect(() => {
+    const saved = sessionStorage.getItem('securepulse_prefs');
+    if (saved) {
+      try { setUserPreferences(JSON.parse(saved)); } catch {}
+    }
+  }, []);
+
+  // Step 1: Auth gate
   if (!user) {
     return <AuthPage onAuth={(u) => setUser(u)} />;
   }
 
-  async function handleScan(websiteUrl, appUrl, repoUrl) {
+  // Step 2: Questionnaire gate (after login, before dashboard)
+  if (!userPreferences) {
+    return (
+      <QuestionnairePage
+        userName={user.name || user.email}
+        onComplete={(prefs) => {
+          setUserPreferences(prefs);
+          sessionStorage.setItem('securepulse_prefs', JSON.stringify(prefs));
+        }}
+      />
+    );
+  }
+
+  async function handleScan(websiteUrl, appUrl, repoUrl, scannerType = 'python') {
     if (websiteUrl === null) { setResults(null); return; }
     if (!websiteUrl && !appUrl && !repoUrl) { setError('Please enter at least one URL to scan.'); return; }
     setError('');
     setLoading(true);
     try {
-      const data = await runScan(websiteUrl, appUrl, repoUrl);
+      const data = await runScan(websiteUrl, appUrl, repoUrl, scannerType, userPreferences);
       data._target = websiteUrl || appUrl;
       setResults(data);
       setPage('scans');
@@ -1090,13 +1182,13 @@ export default function App() {
 
   const renderPage = () => {
     switch(page) {
-      case 'dashboard': return <DashboardPage results={results} setPage={setPage} />;
+      case 'dashboard': return <DashboardPage results={results} setPage={setPage} userPreferences={userPreferences} />;
       case 'scans':     return <ScansPage results={results} onNewScan={handleScan} loading={loading} error={error} />;
       case 'logs':      return <LogsPage results={results} />;
       case 'terminal':  return <ThreatTerminalPage />;
       case 'support':   return <SupportPage />;   // ← uses the imported SupportPage
       case 'settings':  return <SettingsPage />;
-      default:          return <DashboardPage results={results} setPage={setPage} />;
+      default:          return <DashboardPage results={results} setPage={setPage} userPreferences={userPreferences} />;
     }
   };
 
