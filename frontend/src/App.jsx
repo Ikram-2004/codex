@@ -898,14 +898,36 @@ function ScansPage({ results, onNewScan, loading, error }) {
   return (
     <div style={{ flex:1, overflowY:'auto', padding:24, display:'flex', flexDirection:'column', gap:20 }}>
       <div style={{ ...flex('row','stretch','flex-start',16) }}>
-        <div style={{ width:180, flexShrink:0, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20, gap:8 }}>
-          <div style={{ fontSize:11, color:C.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>Security Integrity Score</div>
-          <div style={{ fontSize:64, fontWeight:900, color:C.textPrimary, lineHeight:1, position:'relative' }}>
-            {final.score}
-            <span style={{ fontSize:20, color:gc.color, fontWeight:700, position:'absolute', top:8, right:-28 }}>/100</span>
-          </div>
-          <div style={{ ...flex('row','center','center',6), padding:'4px 12px', borderRadius:20, background:`rgba(108,92,231,0.15)`, border:`1px solid ${C.borderLight}`, color:C.accent, fontSize:11, fontWeight:600 }}>
-            <Icon.Shield /> ELITE STATUS
+        {/* Security Integrity Score — ScoreRing style */}
+        <div style={{ width:180, flexShrink:0, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20, gap:10 }}>
+          <div style={{ fontSize:11, color:C.textMuted, textTransform:'uppercase', letterSpacing:'0.08em', textAlign:'center' }}>Security Integrity Score</div>
+          {(() => {
+            const s = final.score;
+            const size = 110, sw = 9;
+            const r = (size - sw) / 2;
+            const circ = 2 * Math.PI * r;
+            const filled = (s / 100) * circ;
+            const ringColor = s >= 75 ? '#00b894' : s >= 50 ? '#fdcb6e' : s >= 25 ? '#e17055' : '#d63031';
+            return (
+              <div style={{ position:'relative', width:size, height:size }}>
+                <svg width={size} height={size} style={{ transform:'rotate(-90deg)' }}>
+                  <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.border} strokeWidth={sw} />
+                  <circle cx={size/2} cy={size/2} r={r} fill="none"
+                    stroke={ringColor} strokeWidth={sw}
+                    strokeDasharray={`${filled} ${circ}`}
+                    strokeLinecap="round"
+                    style={{ transition:'stroke-dasharray 1s ease' }}
+                  />
+                </svg>
+                <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
+                  <span style={{ fontSize:28, fontWeight:800, color:C.textPrimary, lineHeight:1 }}>{s}</span>
+                  <span style={{ fontSize:9, color:C.textMuted, textTransform:'uppercase', fontWeight:600, letterSpacing:'0.06em' }}>Score</span>
+                </div>
+              </div>
+            );
+          })()}
+          <div style={{ ...flex('row','center','center',6), padding:'4px 12px', borderRadius:20, background:gc.glow ? `rgba(108,92,231,0.12)` : 'rgba(108,92,231,0.12)', border:`1px solid rgba(108,92,231,0.2)`, color:C.accent, fontSize:11, fontWeight:600 }}>
+            <Icon.Shield /> Grade {final.grade}
           </div>
         </div>
         <div style={{ flex:1, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20 }}>
@@ -936,19 +958,15 @@ function ScansPage({ results, onNewScan, loading, error }) {
       </div>
 
       <div style={{ ...flex('row','stretch','flex-start',12) }}>
-        {surfaceCards.map(({label,icon,stat,desc,metric,val,score,color},i) => (
+        {surfaceCards.map(({label,icon,desc,metric,val,score,color},i) => (
           <div key={i} style={{ flex:1, background:C.bgCard, border:`1px solid ${C.border}`, borderLeft:`3px solid ${color}`, borderRadius:12, padding:16, display:'flex', flexDirection:'column', gap:8 }}>
-            <div style={{ ...flex('row','center','space-between',0) }}>
+            <div style={{ ...flex('row','center','flex-start',0) }}>
               <span style={{ color }}>{icon}</span>
-              <span style={{ color, fontSize:10, fontWeight:700, letterSpacing:'0.05em' }}>{stat}</span>
             </div>
             <div style={{ color:C.textPrimary, fontSize:14, fontWeight:600 }}>{label}</div>
             <div style={{ color:C.textSecondary, fontSize:11, lineHeight:1.5 }}>{desc}</div>
             {score !== null && score !== undefined && (
               <>
-                <div style={{ ...flex('row','center','space-between',0), fontSize:10, color:C.textMuted }}>
-                  <span>{metric}</span><span style={{ color:C.textPrimary, fontWeight:600 }}>{val}</span>
-                </div>
                 <div style={{ height:3, background:C.border, borderRadius:2, overflow:'hidden' }}>
                   <div style={{ height:'100%', width:`${score}%`, background:color, borderRadius:2, transition:'width 1s ease' }}/>
                 </div>
@@ -991,18 +1009,7 @@ function ScansPage({ results, onNewScan, loading, error }) {
         </div>
 
         <div style={{ flex:1, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20 }}>
-          <div style={{ ...flex('row','center','space-between',0), marginBottom:16 }}>
-            <div style={{ color:C.textPrimary, fontSize:14, fontWeight:600 }}>Passing Checks</div>
-            <button onClick={() => generatePDFReport(results)} style={{
-              ...flex('row','center','center',8),
-              padding:'10px 20px', borderRadius:8,
-              background:`linear-gradient(135deg, ${C.accent}, #8b7cf8)`,
-              border:'none', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer',
-              boxShadow:`0 4px 16px rgba(108,92,231,0.3)`, flexShrink:0,
-            }}>
-              <Icon.Download /> Download Report
-            </button>
-          </div>
+          <div style={{ color:C.textPrimary, fontSize:14, fontWeight:600, marginBottom:16 }}>Passing Checks</div>
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {passes.length === 0 ? (
               <div style={{ color:C.textSecondary, fontSize:13, textAlign:'center', padding:'24px 0' }}>No passing checks yet.</div>
@@ -1021,9 +1028,18 @@ function ScansPage({ results, onNewScan, loading, error }) {
         </div>
       </div>
 
-      <div style={{ textAlign:'center' }}>
+      <div style={{ ...flex('row','center','center',12) }}>
         <button onClick={() => onNewScan(null)} style={{ padding:'10px 28px', borderRadius:8, background:'transparent', border:`1px solid ${C.border}`, color:C.textSecondary, fontSize:13, cursor:'pointer' }}>
           ← Run New Scan
+        </button>
+        <button onClick={() => generatePDFReport(results)} style={{
+          ...flex('row','center','center',8),
+          padding:'10px 20px', borderRadius:8,
+          background:`linear-gradient(135deg, ${C.accent}, #8b7cf8)`,
+          border:'none', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer',
+          boxShadow:`0 4px 16px rgba(108,92,231,0.3)`,
+        }}>
+          <Icon.Download /> Download Report
         </button>
       </div>
     </div>
