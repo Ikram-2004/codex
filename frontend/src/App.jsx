@@ -1314,7 +1314,7 @@ export default function App() {
       case 'scans':     return <ScansPage results={results} onNewScan={handleScan} loading={loading} error={error} />;
       case 'logs':      return <LogsPage results={results} />;
       case 'terminal':  return <ThreatTerminalPage />;
-      case 'support':   return <SupportPage />;   // ← uses the imported SupportPage
+      case 'support':   return <SupportPage user={user} />;   // ← uses the imported SupportPage
       case 'settings':  return <SettingsPage />;
       case 'profile':   return <ProfilePage user={user} userPreferences={userPreferences} onLogout={handleLogout} setPage={setPage} onUserUpdate={(updatedUser) => setUser(prev => ({ ...prev, ...updatedUser }))} />;
       default:          return <DashboardPage results={results} setPage={setPage} userPreferences={userPreferences} />;
