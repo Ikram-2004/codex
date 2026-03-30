@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { runScan } from './api';
+import { generatePDFReport } from './generateReport';
 
 // ── colour tokens ──────────────────────────────────────────────
 const C = {
@@ -928,13 +929,20 @@ function ScansPage({ results, onNewScan, loading, error }) {
         <div style={{ flex:1, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20 }}>
           <div style={{ ...flex('row','center','space-between',0), marginBottom:16 }}>
             <div style={{ color:C.textPrimary, fontSize:14, fontWeight:600 }}>Passing Checks</div>
-            <button style={{
-              ...flex('row','center','center',4),
-              padding:'4px 10px', borderRadius:6,
-              background:'transparent', border:`1px solid ${C.border}`,
-              color:C.textSecondary, fontSize:11, cursor:'pointer',
-            }}>
-              <Icon.Download /> Download Report
+            <button
+              onClick={() => generatePDFReport(results)}
+              style={{
+                ...flex('row', 'center', 'center', 8),
+                padding: '10px 20px', borderRadius: 8,
+                background: `linear-gradient(135deg, ${C.accent}, #8b7cf8)`,
+                border: 'none', color: '#fff',
+                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                boxShadow: `0 4px 16px rgba(108,92,231,0.3)`,
+                flexShrink: 0,
+              }}
+            >
+              <Icon.Download />
+              Download Report
             </button>
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
