@@ -342,47 +342,47 @@ export default function ProfilePage({ user, userPreferences, onLogout, setPage, 
         background: C.bgCard, border: `1px solid ${C.border}`, borderRadius: 16,
         padding: 0, overflow: 'hidden', marginBottom: 24,
       }}>
-        {/* Banner gradient */}
+        {/* Banner gradient — top stripe only */}
         <div style={{
-          height: 120, position: 'relative',
-          background: 'linear-gradient(135deg, rgba(108,92,231,0.3) 0%, rgba(232,67,147,0.2) 50%, rgba(0,206,201,0.15) 100%)',
+          height: 90, position: 'relative', flexShrink: 0,
+          background: 'linear-gradient(135deg, rgba(108,92,231,0.35) 0%, rgba(232,67,147,0.22) 50%, rgba(0,206,201,0.18) 100%)',
         }}>
           {/* Grid overlay */}
-          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.08 }}>
+          <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', opacity: 0.1 }}>
             <defs>
-              <pattern id="profileGrid" width="30" height="30" patternUnits="userSpaceOnUse">
-                <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#fff" strokeWidth="0.5"/>
+              <pattern id="profileGrid" width="28" height="28" patternUnits="userSpaceOnUse">
+                <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#fff" strokeWidth="0.5"/>
               </pattern>
             </defs>
             <rect width="100%" height="100%" fill="url(#profileGrid)" />
           </svg>
           {/* Floating orbs */}
           <div style={{
-            position: 'absolute', top: 20, right: 80, width: 60, height: 60,
-            borderRadius: '50%', background: 'rgba(108,92,231,0.15)', filter: 'blur(20px)',
+            position: 'absolute', top: 14, right: 80, width: 55, height: 55,
+            borderRadius: '50%', background: 'rgba(108,92,231,0.2)', filter: 'blur(18px)',
           }} />
           <div style={{
-            position: 'absolute', bottom: 10, left: 200, width: 40, height: 40,
-            borderRadius: '50%', background: 'rgba(232,67,147,0.15)', filter: 'blur(15px)',
+            position: 'absolute', bottom: 6, left: 200, width: 36, height: 36,
+            borderRadius: '50%', background: 'rgba(232,67,147,0.18)', filter: 'blur(14px)',
           }} />
         </div>
 
-        {/* Profile info section */}
-        <div style={{ padding: '0 28px 24px', marginTop: -44 }}>
-          <div style={{ ...flex('row', 'flex-end', 'space-between', 16), marginBottom: 20 }}>
-            {/* Avatar */}
-            <div style={{ ...flex('row', 'flex-end', 'flex-start', 16) }}>
+        {/* Profile info section — starts below the banner */}
+        <div style={{ padding: '20px 28px 24px' }}>
+          <div style={{ ...flex('row', 'flex-start', 'space-between', 16), marginBottom: 20 }}>
+            {/* Avatar + name */}
+            <div style={{ ...flex('row', 'center', 'flex-start', 16) }}>
               <div style={{
-                width: 88, height: 88, borderRadius: 20, flexShrink: 0,
+                width: 80, height: 80, borderRadius: 18, flexShrink: 0,
                 background: 'linear-gradient(135deg, #6c5ce7, #e84393)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: 28, fontWeight: 800, letterSpacing: '-0.5px',
-                border: `4px solid ${C.bgCard}`,
-                boxShadow: '0 8px 32px rgba(108,92,231,0.3)',
+                color: '#fff', fontSize: 26, fontWeight: 800, letterSpacing: '-0.5px',
+                border: `3px solid ${C.bgCard}`,
+                boxShadow: '0 6px 24px rgba(108,92,231,0.3)',
               }}>
                 {initials}
               </div>
-              <div style={{ paddingBottom: 4 }}>
+              <div>
                 <h1 style={{ margin: '0 0 2px', color: C.textPrimary, fontSize: 22, fontWeight: 700 }}>
                   {displayProfile?.name || 'User'}
                 </h1>
@@ -403,7 +403,7 @@ export default function ProfilePage({ user, userPreferences, onLogout, setPage, 
             </div>
 
             {/* Action buttons */}
-            <div style={{ ...flex('row', 'center', 'flex-end', 8), paddingBottom: 4 }}>
+            <div style={{ ...flex('row', 'center', 'flex-end', 8), flexShrink: 0 }}>
               <button
                 onClick={openEditModal}
                 style={{
@@ -426,7 +426,7 @@ export default function ProfilePage({ user, userPreferences, onLogout, setPage, 
                   transition: 'all 0.2s',
                 }}
               >
-                <Icons.LogOut /> Sign Out
+                <Icons.LogOut /> Log Out
               </button>
             </div>
           </div>

@@ -185,7 +185,7 @@ const Icon = {
 };
 
 // ── Sidebar ────────────────────────────────────────────────────
-function Sidebar({ activePage, setPage, results, user }) {
+function Sidebar({ activePage, setPage, results, user, onLogout }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard',        icon: 'Dashboard' },
     { id: 'scans',     label: 'Security Scans',   icon: 'Scan'      },
@@ -289,6 +289,23 @@ function Sidebar({ activePage, setPage, results, user }) {
         }}>
           <Icon.Support />
           Help Center
+        </button>
+        <button onClick={onLogout} style={{
+          ...flex('row','center','flex-start',10),
+          padding: '9px 12px', borderRadius: 8,
+          background: 'transparent',
+          color: C.red,
+          border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500,
+          textAlign: 'left', width: '100%',
+          transition: 'background 0.15s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(214,48,49,0.08)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+          Log Out
         </button>
       </div>
     </aside>
@@ -1428,7 +1445,7 @@ export default function App() {
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
       `}</style>
       <div style={{ display:'flex', minHeight:'100vh', background: C.bg }}>
-        <Sidebar activePage={page} setPage={setPage} results={results} user={user} />
+        <Sidebar activePage={page} setPage={setPage} results={results} user={user} onLogout={handleLogout} />
         <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, minHeight:'100vh' }}>
           <TopNav activePage={page} setPage={setPage} results={results} isDark={isDark} setIsDark={setIsDark} />
           <main style={{ flex:1, display:'flex', flexDirection:'column', overflow:'auto' }}>
