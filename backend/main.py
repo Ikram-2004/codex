@@ -126,6 +126,14 @@ def is_valid_url(url: str) -> bool:
         return False
     return True
 
+def is_valid_app_target(target: str) -> bool:
+    target = target.strip()
+    if not target:
+        return False
+    if os.path.isfile(target) and target.endswith(".apk"):
+        return True
+    return is_valid_url(target)
+
 
 def classify_request(method: str, path: str, ua: str, status: int) -> dict:
     ua_lower = ua.lower()
@@ -319,8 +327,12 @@ async def upload_apk(file: UploadFile = File(...)):
     temp_dir = tempfile.mkdtemp()
     file_path = os.path.join(temp_dir, file.filename)
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+    try:
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
+    finally:
+        await file.close()
 
     return {"file_path": file_path}
 
@@ -350,7 +362,7 @@ def run_scan(request: ScanRequest, db: Session = Depends(get_db)):
         website_score = result["score"]
         all_findings.extend(result["findings"])
 
-    if is_valid_url(request.app_url):
+    if is_valid_app_target(request.app_url):
         result = scan_app(request.app_url)
         app_score = result["score"]
         all_findings.extend(result["findings"])

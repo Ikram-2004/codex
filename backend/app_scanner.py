@@ -6,6 +6,7 @@ import os
 import tempfile
 from bs4 import BeautifulSoup
 from urllib.parse import urlparse, urljoin
+from website_scanner import scan_website
 
 def scan_app(url_or_path):
     # ── Route: APK file path or URL? ──────────────────────────
@@ -20,6 +21,16 @@ def scan_app(url_or_path):
 # ═══════════════════════════════════════════════════════════════
 def scan_webapp(url):
     findings = []
+
+    try:
+        ws_result = scan_website(url)
+        ws_score = ws_result.get("score", 100)
+        for f in ws_result.get("findings", []):
+            if f.get("surface") == "Website":
+                f["surface"] = "Application"
+            findings.append(f)
+    except Exception:
+        ws_score = 100
 
     if not url.startswith("http"):
         url = "https://" + url
@@ -484,8 +495,10 @@ def scan_webapp(url):
     except Exception:
         pass
 
-    final_score = access_score + secret_score + input_score + config_score
-    final_score = max(0, min(100, final_score))
+    app_score = access_score + secret_score + input_score + config_score
+    app_score = max(0, min(100, app_score))
+    
+    final_score = (ws_score + app_score) // 2
     return {"score": final_score, "findings": findings}
 
 
