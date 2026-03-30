@@ -768,8 +768,8 @@ function ScansPage({ results, onNewScan, loading, error }) {
             {[
               { label:'TIME ELAPSED', value:'0.42s' },
               { label:'ENDPOINTS', value: findings.length },
-              { label:'THREAT LEVEL', value: issues.length===0?'NULL':issues.length<3?'LOW':'HIGH', col: issues.length===0?C.green:issues.length<3?C.amber:C.red },
-              { label:'STATUS', value: final.grade==='A'?'STABLE':final.grade==='F'?'CRITICAL':'REVIEW', col: final.grade==='A'?C.pink:final.grade==='F'?C.red:C.amber },
+              { label:'THREAT LEVEL', value: final.score>=75?'LOW':final.score>=50?'MEDIUM':'HIGH', col: final.score>=75?C.green:final.score>=50?C.amber:C.red },
+              { label:'STATUS', value: final.score>=75?'STABLE':final.score>=50?'REVIEW':'CRITICAL', col: final.score>=75?C.pink:final.score>=50?C.amber:C.red },
             ].map(({label,value,col},i) => (
               <div key={i}>
                 <div style={{ color:C.textMuted, fontSize:10, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>{label}</div>
