@@ -5,6 +5,7 @@ import SupportPage from './SupportPage';
 import AuthPage from './AuthPage';
 import QuestionnairePage from './QuestionnairePage';
 import LandingPage from './LandingPage';
+import ProfilePage from './ProfilePage';
 
 
 // ── colour tokens ──────────────────────────────────────────────
@@ -184,7 +185,7 @@ const Icon = {
 };
 
 // ── Sidebar ────────────────────────────────────────────────────
-function Sidebar({ activePage, setPage, results }) {
+function Sidebar({ activePage, setPage, results, user }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard',        icon: 'Dashboard' },
     { id: 'scans',     label: 'Security Scans',   icon: 'Scan'      },
@@ -192,6 +193,8 @@ function Sidebar({ activePage, setPage, results }) {
     { id: 'terminal',  label: 'Live Terminal',    icon: 'Terminal'  },
     { id: 'settings',  label: 'Settings',         icon: 'Settings'  },
   ];
+
+  const userName = user?.name || 'Security Admin';
 
   return (
     <aside style={{
@@ -218,12 +221,18 @@ function Sidebar({ activePage, setPage, results }) {
         </div>
       </div>
 
-      {/* User badge */}
+      {/* User badge — clickable to profile */}
       <div style={{ padding: '12px 16px', borderBottom: `1px solid ${C.border}` }}>
-        <div style={{
-          ...flex('row','center','flex-start',10),
-          background: C.bgCard, borderRadius: 8, padding: '8px 10px',
-        }}>
+        <div
+          onClick={() => setPage('profile')}
+          style={{
+            ...flex('row','center','flex-start',10),
+            background: activePage === 'profile' ? C.accentSoft : C.bgCard,
+            borderRadius: 8, padding: '8px 10px', cursor: 'pointer',
+            transition: 'all 0.15s',
+            border: activePage === 'profile' ? `1px solid rgba(108,92,231,0.2)` : '1px solid transparent',
+          }}
+        >
           <div style={{
             width: 28, height: 28, borderRadius: '50%',
             background: `linear-gradient(135deg, ${C.accent}, ${C.pink})`,
@@ -233,7 +242,7 @@ function Sidebar({ activePage, setPage, results }) {
             <Icon.User />
           </div>
           <div>
-            <div style={{ color: C.textPrimary, fontSize: 12, fontWeight: 600 }}>Security Admin</div>
+            <div style={{ color: C.textPrimary, fontSize: 12, fontWeight: 600 }}>{userName}</div>
             <div style={{ color: C.textSecondary, fontSize: 10 }}>Level 4 Access</div>
           </div>
         </div>
@@ -332,12 +341,20 @@ function TopNav({ activePage, setPage, results, isDark, setIsDark }) {
         <button style={{ background:'none', border:'none', color: C.textSecondary, cursor:'pointer', padding:4 }}>
           <Icon.Bell />
         </button>
-        <div style={{
-          width: 28, height: 28, borderRadius: '50%',
-          background: `linear-gradient(135deg, ${C.accent}, ${C.pink})`,
-          display:'flex', alignItems:'center', justifyContent:'center',
-          color:'#fff',
-        }}>
+        <div
+          onClick={() => setPage('profile')}
+          title="View Profile"
+          style={{
+            width: 28, height: 28, borderRadius: '50%',
+            background: `linear-gradient(135deg, ${C.accent}, ${C.pink})`,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            color:'#fff', cursor: 'pointer',
+            transition: 'transform 0.15s, box-shadow 0.15s',
+            boxShadow: activePage === 'profile' ? '0 0 0 2px rgba(108,92,231,0.4)' : 'none',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform = 'scale(1.1)'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(108,92,231,0.3)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = activePage === 'profile' ? '0 0 0 2px rgba(108,92,231,0.4)' : 'none'; }}
+        >
           <Icon.User />
         </div>
       </div>
@@ -1260,6 +1277,14 @@ export default function App() {
     setLoading(false);
   }
 
+  function handleLogout() {
+    setUser(null);
+    setUserPreferences(null);
+    setResults(null);
+    setPage('dashboard');
+    sessionStorage.removeItem('securepulse_prefs');
+  }
+
   const renderPage = () => {
     switch(page) {
       case 'dashboard': return <DashboardPage results={results} setPage={setPage} userPreferences={userPreferences} />;
@@ -1268,6 +1293,7 @@ export default function App() {
       case 'terminal':  return <ThreatTerminalPage />;
       case 'support':   return <SupportPage />;   // ← uses the imported SupportPage
       case 'settings':  return <SettingsPage />;
+      case 'profile':   return <ProfilePage user={user} userPreferences={userPreferences} onLogout={handleLogout} setPage={setPage} />;
       default:          return <DashboardPage results={results} setPage={setPage} userPreferences={userPreferences} />;
     }
   };
@@ -1291,7 +1317,7 @@ export default function App() {
         @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
       `}</style>
       <div style={{ display:'flex', minHeight:'100vh', background: C.bg }}>
-        <Sidebar activePage={page} setPage={setPage} results={results} />
+        <Sidebar activePage={page} setPage={setPage} results={results} user={user} />
         <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, minHeight:'100vh' }}>
           <TopNav activePage={page} setPage={setPage} results={results} isDark={isDark} setIsDark={setIsDark} />
           <main style={{ flex:1, display:'flex', flexDirection:'column', overflow:'auto' }}>
