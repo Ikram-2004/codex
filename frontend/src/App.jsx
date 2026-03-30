@@ -562,45 +562,60 @@ function DashboardPage({ results, setPage, userPreferences, userId }) {
           <p style={{ margin:'0 0 16px', color:C.textSecondary, fontSize:13 }}>
             Instantly analyze any endpoint for vulnerabilities, malicious injections, or structural weaknesses.
           </p>
-          <div style={{ ...flex('row','center','flex-start',10) }}>
-            <div style={{
-              ...flex('row','center','flex-start',8),
-              flex:1, background:C.bg, border:`1px solid ${C.border}`,
-              borderRadius:8, padding:'10px 14px',
-            }}>
-              <span style={{ color:C.textMuted }}><Icon.Globe /></span>
-              <input
-                placeholder="Enter target URL (e.g. https://api.secure-vault.io)"
-                style={{ flex:1, background:'transparent', border:'none', outline:'none', color:C.textSecondary, fontSize:13 }}
-              />
-            </div>
-            <button onClick={() => setPage('scans')} style={{
-              padding:'10px 20px', borderRadius:8, flexShrink:0,
-              background:C.accent, border:'none', color:'#fff',
-              fontSize:13, fontWeight:600, cursor:'pointer',
-              ...flex('row','center','center',6),
-            }}>
-              <Icon.Scan /> SCAN
-            </button>
-          </div>
+          <button onClick={() => setPage('scans')} style={{
+            padding:'11px 28px', borderRadius:8,
+            background:`linear-gradient(135deg, ${C.accent}, #8b7cf8)`,
+            border:'none', color:'#fff',
+            fontSize:14, fontWeight:600, cursor:'pointer',
+            boxShadow:`0 4px 20px rgba(108,92,231,0.35)`,
+            transition:'all 0.2s',
+            ...flex('row','center','center',8),
+          }}
+          onMouseEnter={e => { e.currentTarget.style.transform='translateY(-1px)'; e.currentTarget.style.boxShadow='0 6px 24px rgba(108,92,231,0.5)'; }}
+          onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)'; e.currentTarget.style.boxShadow='0 4px 20px rgba(108,92,231,0.35)'; }}
+          >
+            <Icon.Scan /> Start Scan
+          </button>
         </div>
 
         <div style={{ ...flex('row','stretch','flex-start',12) }}>
+          {/* Threat Level Card */}
           <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20, flex:1 }}>
-            <div style={{ color:C.textSecondary, fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:12 }}>Threat Level</div>
-            <div style={{ ...flex('row','flex-end','space-between',0) }}>
-              <ThreatGauge pct={results ? results.final.score : 74} />
-              <div style={{ display:'flex', flexDirection:'column', gap:8, fontSize:12 }}>
-                {[{dot:C.green,label:'Active Firewall'},{dot:C.red,label:'2 Open Ports'},{dot:C.amber,label:'Encrypted'}].map(({dot,label},i) => (
-                  <div key={i} style={{ ...flex('row','center','flex-start',6), color:C.textSecondary }}>
-                    <span style={{ width:8,height:8,borderRadius:'50%',background:dot,display:'inline-block',flexShrink:0 }}/>{label}
+            <div style={{ color:C.textSecondary, fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:14 }}>Threat Level</div>
+            {(() => {
+              const score = results ? results.final.score : 0;
+              const barColor = score >= 70 ? C.green : score >= 40 ? C.amber : C.red;
+              const statusLabel = score >= 70 ? 'SECURE' : score >= 40 ? 'CAUTION' : 'CRITICAL';
+              return (
+                <>
+                  <div style={{ ...flex('row','flex-end','space-between',0), marginBottom:10 }}>
+                    <div style={{ fontSize:36, fontWeight:800, color:C.textPrimary, lineHeight:1 }}>{score}<span style={{ fontSize:16, color:C.textSecondary, fontWeight:500 }}>/100</span></div>
+                    <span style={{ padding:'3px 10px', borderRadius:20, fontSize:10, fontWeight:700, letterSpacing:'0.06em',
+                      background: score >= 70 ? C.greenSoft : score >= 40 ? C.amberSoft : C.redSoft,
+                      color: barColor,
+                    }}>{statusLabel}</span>
                   </div>
-                ))}
-              </div>
-            </div>
-            <div style={{ color:C.textMuted, fontSize:10, textTransform:'uppercase', letterSpacing:'0.08em', marginTop:8 }}>Global Status</div>
+                  <div style={{ height:8, background:C.border, borderRadius:4, overflow:'hidden', marginBottom:14 }}>
+                    <div style={{
+                      height:'100%', width:`${score}%`,
+                      background: `linear-gradient(90deg, ${barColor}, ${barColor}cc)`,
+                      borderRadius:4, transition:'width 1s ease',
+                    }}/>
+                  </div>
+                  <div style={{ display:'flex', flexDirection:'column', gap:6, fontSize:12 }}>
+                    {[{dot:C.green,label:'Active Firewall'},{dot:C.red,label:'2 Open Ports'},{dot:C.amber,label:'Encrypted'}].map(({dot,label},i) => (
+                      <div key={i} style={{ ...flex('row','center','flex-start',6), color:C.textSecondary }}>
+                        <span style={{ width:7,height:7,borderRadius:'50%',background:dot,display:'inline-block',flexShrink:0 }}/>{label}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ color:C.textMuted, fontSize:10, textTransform:'uppercase', letterSpacing:'0.08em', marginTop:10 }}>Global Status</div>
+                </>
+              );
+            })()}
           </div>
 
+          {/* SecurePulse Active Card */}
           <div style={{
             background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20, flex:1,
             display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10,
@@ -622,40 +637,78 @@ function DashboardPage({ results, setPage, userPreferences, userId }) {
 
         <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20 }}>
           <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
-            <div style={{ color:C.textSecondary, fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase' }}>Your Score vs Global Distribution</div>
+            <div style={{ color:C.textSecondary, fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase' }}>Your Score vs Global Average</div>
           </div>
-          <div style={{ position:'relative', height:120, display:'flex', alignItems:'flex-end', gap:12, paddingBottom:24, borderBottom:`1px solid ${C.borderLight}` }}>
-            {[
-              { label: '0-20',   pct: 10, color: '#e74c3c' },
-              { label: '21-40',  pct: 25, color: '#f39c12' },
-              { label: '41-60',  pct: 50, color: '#6c5ce7' },
-              { label: '61-80',  pct: 40, color: '#00b894' },
-              { label: '81-100', pct: 15, color: '#e84393' },
-            ].map((bar, i) => (
-              <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', height:'100%', justifyContent:'flex-end', position:'relative' }}>
-                <div style={{ 
-                  width: '100%', maxWidth:40, height: `${bar.pct}%`, 
-                  background: bar.color, opacity:0.15, borderRadius:'4px 4px 0 0'
-                }} />
-                <div style={{ position:'absolute', bottom:-20, color:C.textMuted, fontSize:11 }}>{bar.label}</div>
-              </div>
-            ))}
-            {(() => {
-              const score = results ? results.final.score : 74;
-              const leftPct = Math.max(5, Math.min(95, score));
-              return (
-                <div style={{
-                  position:'absolute', bottom:24, left: `${leftPct}%`, transform:'translateX(-50%)',
-                  display:'flex', flexDirection:'column', alignItems:'center', zIndex:10
-                }}>
-                  <div style={{ background:C.accent, color:'#fff', padding:'2px 8px', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4, whiteSpace:'nowrap', boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>YOU: {score}</div>
-                  <div style={{ width:2, height:100, background:C.accent, position:'relative' }}>
-                    <div style={{ width:8, height:8, borderRadius:'50%', background:C.accent, position:'absolute', bottom:-4, left:-3 }}/>
-                  </div>
+          {/* Horizontal Bar Chart */}
+          {(() => {
+            const myScore = results ? results.final.score : 0;
+            const globalAvg = 63; // representative global average
+            const bars = [
+              { label: 'My Score',       value: myScore,    color: C.accent,  bg: C.accentSoft },
+              { label: 'Global Average', value: globalAvg,  color: C.cyan,    bg: C.cyanSoft },
+            ];
+            // X-axis tick marks 0,20,40,60,80,100
+            const ticks = [0, 20, 40, 60, 80, 100];
+            return (
+              <div style={{ position:'relative' }}>
+                {/* X axis grid lines behind bars */}
+                <div style={{ position:'absolute', top:0, left:90, right:0, bottom:28, pointerEvents:'none' }}>
+                  {ticks.map(t => (
+                    <div key={t} style={{
+                      position:'absolute', left:`${t}%`, top:0, bottom:0,
+                      width:1, background: t === 0 ? C.borderLight : `${C.border}`,
+                      opacity: t === 0 ? 0.8 : 0.4,
+                    }}/>
+                  ))}
                 </div>
-              );
-            })()}
-          </div>
+                {/* Bars */}
+                <div style={{ display:'flex', flexDirection:'column', gap:14, paddingBottom:28 }}>
+                  {bars.map((bar, i) => (
+                    <div key={i} style={{ display:'flex', alignItems:'center', gap:12 }}>
+                      <div style={{ width:82, textAlign:'right', color:C.textSecondary, fontSize:12, fontWeight:500, flexShrink:0 }}>{bar.label}</div>
+                      <div style={{ flex:1, position:'relative', height:28, background:C.bg, borderRadius:6, overflow:'hidden', border:`1px solid ${C.border}` }}>
+                        <div style={{
+                          height:'100%',
+                          width:`${bar.value}%`,
+                          background: `linear-gradient(90deg, ${bar.color}cc, ${bar.color})`,
+                          borderRadius:5,
+                          transition:'width 1.2s cubic-bezier(0.25,0.46,0.45,0.94)',
+                          position:'relative',
+                        }}>
+                          <div style={{
+                            position:'absolute', right:8, top:'50%', transform:'translateY(-50%)',
+                            color:'#fff', fontSize:11, fontWeight:700,
+                            display: bar.value > 12 ? 'block' : 'none',
+                          }}>{bar.value}</div>
+                        </div>
+                        {bar.value <= 12 && (
+                          <div style={{ position:'absolute', left: `${bar.value + 1}%`, top:'50%', transform:'translateY(-50%)', color:C.textSecondary, fontSize:11, fontWeight:700 }}>{bar.value}</div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {/* X axis labels */}
+                <div style={{ display:'flex', marginLeft:90, position:'relative', height:20 }}>
+                  {ticks.map(t => (
+                    <div key={t} style={{
+                      position:'absolute', left:`${t}%`, transform:'translateX(-50%)',
+                      color:C.textMuted, fontSize:10,
+                    }}>{t}</div>
+                  ))}
+                </div>
+                {/* Legend */}
+                <div style={{ display:'flex', gap:16, marginTop:12, marginLeft:90 }}>
+                  {bars.map((bar,i) => (
+                    <div key={i} style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <div style={{ width:10, height:10, borderRadius:2, background:bar.color }}/>
+                      <span style={{ color:C.textSecondary, fontSize:11 }}>{bar.label}: <strong style={{ color:C.textPrimary }}>{bar.value}</strong></span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20 }}>
