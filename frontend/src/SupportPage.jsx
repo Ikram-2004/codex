@@ -247,7 +247,7 @@ function ArticleModal({ article, onClose }) {
 }
 
 // ── Ticket Modal ───────────────────────────────────────────────
-function TicketModal({ onClose }) {
+function TicketModal({ onClose, userId }) {
   const [form, setForm] = useState({ name: '', email: '', subject: '', priority: 'medium', description: '' });
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(null);
@@ -266,7 +266,7 @@ function TicketModal({ onClose }) {
       const res = await fetch(`${BASE_URL}/ticket`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, user_id: userId || null }),
       });
       const data = await res.json();
       setSuccess(data);
@@ -892,7 +892,7 @@ function AISearch({ onArticleOpen }) {
 }
 
 // ── Main SupportPage ───────────────────────────────────────────
-export default function SupportPage() {
+export default function SupportPage({ user }) {
   const [modal, setModal] = useState(null); // 'ticket' | 'chat' | 'community' | 'command' | {article}
   const [articleData, setArticleData] = useState(null);
 
@@ -964,7 +964,7 @@ export default function SupportPage() {
       </div>
 
       {/* Modals */}
-      {modal === 'ticket' && <TicketModal onClose={closeModal} />}
+      {modal === 'ticket' && <TicketModal onClose={closeModal} userId={user?.id} />}
       {modal === 'chat' && <LiveChatModal onClose={closeModal} />}
       {modal === 'community' && <CommunityModal onClose={closeModal} />}
       {modal === 'command' && <CommandModal onClose={closeModal} />}
