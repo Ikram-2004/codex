@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { getUserProfile, getScanHistory, getDashboardStats, getUserTickets, getChatHistory } from './api';
+import { getUserProfile, getScanHistory, getDashboardStats, getUserTickets, getChatHistory, updateUserProfile } from './api';
 
 // ── colour tokens (CSS custom props from App.jsx) ──────────────
 const C = {
@@ -101,6 +101,16 @@ const Icons = {
   Check: () => (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12"/>
+    </svg>
+  ),
+  Save: () => (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>
+    </svg>
+  ),
+  X: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
     </svg>
   ),
 };
@@ -212,7 +222,7 @@ function ScoreRing({ score, size = 100, strokeWidth = 8 }) {
 }
 
 // ── Main Profile Page ──────────────────────────────────────────
-export default function ProfilePage({ user, userPreferences, onLogout, setPage }) {
+export default function ProfilePage({ user, userPreferences, onLogout, setPage, onUserUpdate }) {
   const [profile, setProfile] = useState(null);
   const [stats, setStats] = useState(null);
   const [scanHistory, setScanHistory] = useState([]);
@@ -221,6 +231,14 @@ export default function ProfilePage({ user, userPreferences, onLogout, setPage }
   const [loadingData, setLoadingData] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
   const [mounted, setMounted] = useState(false);
+
+  // Edit Profile modal state
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editCompany, setEditCompany] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setMounted(true), 50);
@@ -259,6 +277,40 @@ export default function ProfilePage({ user, userPreferences, onLogout, setPage }
   const memberSince = displayProfile?.created_at
     ? new Date(displayProfile.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     : 'Recently joined';
+
+  function openEditModal() {
+    setEditName(displayProfile?.name || '');
+    setEditCompany(displayProfile?.company || '');
+    setEditError('');
+    setEditSuccess(false);
+    setShowEditModal(true);
+  }
+
+  async function handleSaveProfile() {
+    if (!editName.trim()) {
+      setEditError('Name cannot be empty');
+      return;
+    }
+    setEditSaving(true);
+    setEditError('');
+    try {
+      const result = await updateUserProfile(user.id, editName.trim(), editCompany.trim());
+      if (result.success) {
+        setProfile(prev => ({ ...prev, name: result.user.name, company: result.user.company }));
+        if (onUserUpdate) {
+          onUserUpdate({ name: result.user.name, company: result.user.company });
+        }
+        setEditSuccess(true);
+        setTimeout(() => {
+          setShowEditModal(false);
+          setEditSuccess(false);
+        }, 1200);
+      }
+    } catch (err) {
+      setEditError(err.response?.data?.detail || 'Failed to update profile');
+    }
+    setEditSaving(false);
+  }
 
   const tabs = [
     { id: 'overview', label: 'Overview' },
@@ -349,7 +401,7 @@ export default function ProfilePage({ user, userPreferences, onLogout, setPage }
             {/* Action buttons */}
             <div style={{ ...flex('row', 'center', 'flex-end', 8), paddingBottom: 4 }}>
               <button
-                onClick={() => setPage('settings')}
+                onClick={openEditModal}
                 style={{
                   ...flex('row', 'center', 'center', 6),
                   padding: '8px 16px', borderRadius: 8,
@@ -766,8 +818,239 @@ export default function ProfilePage({ user, userPreferences, onLogout, setPage }
         </div>
       )}
 
+      {/* ── Edit Profile Modal ── */}
+      {showEditModal && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 1000,
+          background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowEditModal(false); }}
+        >
+          <div style={{
+            width: '100%', maxWidth: 440,
+            background: C.bgCard, border: `1px solid ${C.border}`,
+            borderRadius: 16, padding: 0, overflow: 'hidden',
+            boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
+            animation: 'modalIn 0.25s ease',
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '18px 24px', borderBottom: `1px solid ${C.border}`,
+              ...flex('row', 'center', 'space-between', 0),
+            }}>
+              <div style={{ ...flex('row', 'center', 'flex-start', 10) }}>
+                <div style={{
+                  width: 32, height: 32, borderRadius: 8,
+                  background: 'linear-gradient(135deg, rgba(108,92,231,0.15), rgba(232,67,147,0.1))',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: C.accent,
+                }}>
+                  <Icons.Edit />
+                </div>
+                <span style={{ color: C.textPrimary, fontSize: 16, fontWeight: 600 }}>Edit Profile</span>
+              </div>
+              <button
+                onClick={() => setShowEditModal(false)}
+                style={{
+                  background: 'none', border: 'none', color: C.textMuted,
+                  cursor: 'pointer', padding: 4, display: 'flex',
+                  transition: 'color 0.15s',
+                }}
+                onMouseEnter={e => e.currentTarget.style.color = C.textPrimary}
+                onMouseLeave={e => e.currentTarget.style.color = C.textMuted}
+              >
+                <Icons.X />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: 24 }}>
+              {/* Avatar preview */}
+              <div style={{ ...flex('row', 'center', 'flex-start', 16), marginBottom: 24 }}>
+                <div style={{
+                  width: 56, height: 56, borderRadius: 14, flexShrink: 0,
+                  background: 'linear-gradient(135deg, #6c5ce7, #e84393)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  color: '#fff', fontSize: 20, fontWeight: 800,
+                  boxShadow: '0 4px 16px rgba(108,92,231,0.3)',
+                }}>
+                  {(editName || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                </div>
+                <div>
+                  <div style={{ color: C.textPrimary, fontSize: 14, fontWeight: 600 }}>
+                    {editName || 'Your Name'}
+                  </div>
+                  <div style={{ color: C.textSecondary, fontSize: 12 }}>
+                    {displayProfile?.email}
+                  </div>
+                </div>
+              </div>
+
+              {/* Name field */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{
+                  display: 'block', color: C.textSecondary, fontSize: 11,
+                  fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  marginBottom: 7,
+                }}>
+                  Full Name
+                </label>
+                <div style={{
+                  ...flex('row', 'center', 'flex-start', 8),
+                  background: C.bg, border: `1px solid ${C.border}`,
+                  borderRadius: 8, padding: '0 12px',
+                  transition: 'border-color 0.2s',
+                }}>
+                  <span style={{ color: C.textMuted, flexShrink: 0 }}><Icons.User /></span>
+                  <input
+                    value={editName}
+                    onChange={e => setEditName(e.target.value)}
+                    placeholder="Enter your full name"
+                    autoFocus
+                    style={{
+                      flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                      color: C.textPrimary, fontSize: 13, padding: '11px 0',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Company field */}
+              <div style={{ marginBottom: 18 }}>
+                <label style={{
+                  display: 'block', color: C.textSecondary, fontSize: 11,
+                  fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  marginBottom: 7,
+                }}>
+                  Company / Organization
+                </label>
+                <div style={{
+                  ...flex('row', 'center', 'flex-start', 8),
+                  background: C.bg, border: `1px solid ${C.border}`,
+                  borderRadius: 8, padding: '0 12px',
+                }}>
+                  <span style={{ color: C.textMuted, flexShrink: 0 }}><Icons.Building /></span>
+                  <input
+                    value={editCompany}
+                    onChange={e => setEditCompany(e.target.value)}
+                    placeholder="Enter your company (optional)"
+                    style={{
+                      flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                      color: C.textPrimary, fontSize: 13, padding: '11px 0',
+                      fontFamily: 'inherit',
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Email (read-only) */}
+              <div style={{ marginBottom: 20 }}>
+                <label style={{
+                  display: 'block', color: C.textSecondary, fontSize: 11,
+                  fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
+                  marginBottom: 7,
+                }}>
+                  Email Address
+                </label>
+                <div style={{
+                  ...flex('row', 'center', 'flex-start', 8),
+                  background: C.bg, border: `1px solid ${C.border}`,
+                  borderRadius: 8, padding: '0 12px', opacity: 0.6,
+                }}>
+                  <span style={{ color: C.textMuted, flexShrink: 0 }}><Icons.Mail /></span>
+                  <input
+                    value={displayProfile?.email || ''}
+                    disabled
+                    style={{
+                      flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                      color: C.textSecondary, fontSize: 13, padding: '11px 0',
+                      fontFamily: 'inherit', cursor: 'not-allowed',
+                    }}
+                  />
+                </div>
+                <div style={{ color: C.textMuted, fontSize: 10, marginTop: 4 }}>Email cannot be changed</div>
+              </div>
+
+              {/* Error message */}
+              {editError && (
+                <div style={{
+                  padding: '10px 14px', borderRadius: 8, marginBottom: 16,
+                  background: 'rgba(214,48,49,0.1)', border: '1px solid rgba(214,48,49,0.2)',
+                  color: '#d63031', fontSize: 12,
+                  ...flex('row', 'center', 'flex-start', 8),
+                }}>
+                  <Icons.AlertCircle /> {editError}
+                </div>
+              )}
+
+              {/* Success message */}
+              {editSuccess && (
+                <div style={{
+                  padding: '10px 14px', borderRadius: 8, marginBottom: 16,
+                  background: 'rgba(0,184,148,0.1)', border: '1px solid rgba(0,184,148,0.2)',
+                  color: '#00b894', fontSize: 12,
+                  ...flex('row', 'center', 'flex-start', 8),
+                }}>
+                  <Icons.Check /> Profile updated successfully!
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 24px', borderTop: `1px solid ${C.border}`,
+              ...flex('row', 'center', 'flex-end', 10),
+            }}>
+              <button
+                onClick={() => setShowEditModal(false)}
+                style={{
+                  padding: '9px 20px', borderRadius: 8,
+                  background: 'transparent', border: `1px solid ${C.border}`,
+                  color: C.textSecondary, fontSize: 13, fontWeight: 500,
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveProfile}
+                disabled={editSaving || editSuccess}
+                style={{
+                  ...flex('row', 'center', 'center', 6),
+                  padding: '9px 24px', borderRadius: 8,
+                  background: editSuccess
+                    ? '#00b894'
+                    : editSaving
+                      ? C.textMuted
+                      : 'linear-gradient(135deg, #6c5ce7, #8b7cf8)',
+                  border: 'none', color: '#fff', fontSize: 13, fontWeight: 600,
+                  cursor: editSaving || editSuccess ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s',
+                  boxShadow: editSaving || editSuccess ? 'none' : '0 4px 16px rgba(108,92,231,0.3)',
+                }}
+              >
+                {editSaving ? (
+                  <><span style={{ animation: 'spin 0.8s linear infinite', display: 'inline-block' }}>⟳</span> Saving...</>
+                ) : editSuccess ? (
+                  <><Icons.Check /> Saved!</>
+                ) : (
+                  <><Icons.Save /> Save Changes</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes modalIn {
+          from { opacity: 0; transform: scale(0.95) translateY(10px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        input::placeholder { color: var(--textMuted); }
       `}</style>
     </div>
   );

@@ -386,7 +386,7 @@ function ThreatGauge({ pct = 74 }) {
 }
 
 // ── AI Chat Panel ──────────────────────────────────────────────
-function AIAssistant({ results, userPreferences }) {
+function AIAssistant({ results, userPreferences, userId }) {
   const [messages, setMessages] = useState([
     { from: 'bot', text: results
         ? `Good morning, Sentinel. I've analyzed your recent scan. The score is ${results.final.score}/100 with grade ${results.final.grade}. ${results.final.message}.`
@@ -422,6 +422,9 @@ function AIAssistant({ results, userPreferences }) {
       };
       if (userPreferences) {
         chatBody.user_preferences = userPreferences;
+      }
+      if (userId) {
+        chatBody.user_id = userId;
       }
       const res = await fetch('http://localhost:8000/chat', {
         method: 'POST',
@@ -537,7 +540,7 @@ function AIAssistant({ results, userPreferences }) {
 }
 
 // ── Dashboard Page ─────────────────────────────────────────────
-function DashboardPage({ results, setPage, userPreferences }) {
+function DashboardPage({ results, setPage, userPreferences, userId }) {
   const recentScans = results ? [
     { name: results.scores.website !== null ? 'Website Scan' : null, status: results.final.grade === 'A' ? 'PASSED' : results.final.grade === 'F' ? 'FAILED' : 'WARNING', critical: results.findings.filter(f=>f.severity==='CRITICAL' && f.surface==='Website').length, warning: results.findings.filter(f=>f.severity==='MEDIUM' && f.surface==='Website').length, ago: 'Just now' },
     { name: results.scores.app !== null ? 'App Scan' : null, status: (results.scores.app||0) >= 70 ? 'PASSED' : (results.scores.app||0) >= 40 ? 'WARNING' : 'FAILED', critical: results.findings.filter(f=>f.severity==='CRITICAL'&&f.surface==='Application').length, warning: results.findings.filter(f=>f.severity==='MEDIUM'&&f.surface==='Application').length, ago: 'Just now' },
@@ -683,7 +686,7 @@ function DashboardPage({ results, setPage, userPreferences }) {
       </div>
 
       <div style={{ flexShrink:0 }}>
-        <AIAssistant results={results} userPreferences={userPreferences} />
+        <AIAssistant results={results} userPreferences={userPreferences} userId={userId} />
       </div>
     </div>
   );
@@ -1287,7 +1290,7 @@ export default function App() {
         finalAppUrl = uploadRes.file_path;
       }
       
-      const data = await runScan(websiteUrl, finalAppUrl, repoUrl, scannerType, userPreferences);
+      const data = await runScan(websiteUrl, finalAppUrl, repoUrl, scannerType, userPreferences, user?.id);
       data._target = websiteUrl || appUrl || (appFile ? appFile.name : 'Unknown');
       setResults(data);
       setPage('scans');
@@ -1307,13 +1310,13 @@ export default function App() {
 
   const renderPage = () => {
     switch(page) {
-      case 'dashboard': return <DashboardPage results={results} setPage={setPage} userPreferences={userPreferences} />;
+      case 'dashboard': return <DashboardPage results={results} setPage={setPage} userPreferences={userPreferences} userId={user?.id} />;
       case 'scans':     return <ScansPage results={results} onNewScan={handleScan} loading={loading} error={error} />;
       case 'logs':      return <LogsPage results={results} />;
       case 'terminal':  return <ThreatTerminalPage />;
       case 'support':   return <SupportPage />;   // ← uses the imported SupportPage
       case 'settings':  return <SettingsPage />;
-      case 'profile':   return <ProfilePage user={user} userPreferences={userPreferences} onLogout={handleLogout} setPage={setPage} />;
+      case 'profile':   return <ProfilePage user={user} userPreferences={userPreferences} onLogout={handleLogout} setPage={setPage} onUserUpdate={(updatedUser) => setUser(prev => ({ ...prev, ...updatedUser }))} />;
       default:          return <DashboardPage results={results} setPage={setPage} userPreferences={userPreferences} />;
     }
   };

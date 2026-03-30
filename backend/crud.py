@@ -95,6 +95,22 @@ def update_user_preferences(db: Session, user_id: str, preferences: dict) -> Use
     return user
 
 
+def update_user_profile(db: Session, user_id: str, name: str = None, company: str = None) -> User | None:
+    """Update user's profile info (name, company)."""
+    user = get_user_by_id(db, user_id)
+    if not user:
+        return None
+
+    if name is not None:
+        user.name = name.strip()
+    if company is not None:
+        user.company = company.strip()
+
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 # ══════════════════════════════════════════════════════════════
 #  SCAN CRUD
 # ══════════════════════════════════════════════════════════════
