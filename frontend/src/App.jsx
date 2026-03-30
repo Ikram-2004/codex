@@ -584,21 +584,23 @@ function DashboardPage({ results, setPage, userPreferences, userId }) {
             <div style={{ color:C.textSecondary, fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:14 }}>Threat Level</div>
             {(() => {
               const score = results ? results.final.score : 0;
-              const barColor = score >= 70 ? C.green : score >= 40 ? C.amber : C.red;
+              const barHex = score >= 70 ? '#00b894' : score >= 40 ? '#fdcb6e' : '#d63031';
+              const barColorVar = score >= 70 ? C.green : score >= 40 ? C.amber : C.red;
               const statusLabel = score >= 70 ? 'SECURE' : score >= 40 ? 'CAUTION' : 'CRITICAL';
+              const softBg = score >= 70 ? C.greenSoft : score >= 40 ? C.amberSoft : C.redSoft;
               return (
                 <>
                   <div style={{ ...flex('row','flex-end','space-between',0), marginBottom:10 }}>
                     <div style={{ fontSize:36, fontWeight:800, color:C.textPrimary, lineHeight:1 }}>{score}<span style={{ fontSize:16, color:C.textSecondary, fontWeight:500 }}>/100</span></div>
                     <span style={{ padding:'3px 10px', borderRadius:20, fontSize:10, fontWeight:700, letterSpacing:'0.06em',
-                      background: score >= 70 ? C.greenSoft : score >= 40 ? C.amberSoft : C.redSoft,
-                      color: barColor,
+                      background: softBg,
+                      color: barColorVar,
                     }}>{statusLabel}</span>
                   </div>
                   <div style={{ height:8, background:C.border, borderRadius:4, overflow:'hidden', marginBottom:14 }}>
                     <div style={{
                       height:'100%', width:`${score}%`,
-                      background: `linear-gradient(90deg, ${barColor}, ${barColor}cc)`,
+                      background: `linear-gradient(90deg, ${barHex}aa, ${barHex})`,
                       borderRadius:4, transition:'width 1s ease',
                     }}/>
                   </div>
@@ -644,8 +646,8 @@ function DashboardPage({ results, setPage, userPreferences, userId }) {
             const myScore = results ? results.final.score : 0;
             const globalAvg = 63; // representative global average
             const bars = [
-              { label: 'My Score',       value: myScore,    color: C.accent,  bg: C.accentSoft },
-              { label: 'Global Average', value: globalAvg,  color: C.cyan,    bg: C.cyanSoft },
+              { label: 'My Score',       value: myScore,    color: C.accent,  hex: '#6c5ce7' },
+              { label: 'Global Average', value: globalAvg,  color: C.cyan,    hex: '#00cec9' },
             ];
             // X-axis tick marks 0,20,40,60,80,100
             const ticks = [0, 20, 40, 60, 80, 100];
@@ -670,7 +672,7 @@ function DashboardPage({ results, setPage, userPreferences, userId }) {
                         <div style={{
                           height:'100%',
                           width:`${bar.value}%`,
-                          background: `linear-gradient(90deg, ${bar.color}cc, ${bar.color})`,
+                          background: `linear-gradient(90deg, ${bar.hex}aa, ${bar.hex})`,
                           borderRadius:5,
                           transition:'width 1.2s cubic-bezier(0.25,0.46,0.45,0.94)',
                           position:'relative',
