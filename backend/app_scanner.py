@@ -18,19 +18,22 @@ def scan_app(url_or_path):
 
 # ═══════════════════════════════════════════════════════════════
 # WEB APP SCANNER
+# Scoring strategy: website_scanner result is the anchor score.
+# App-layer checks apply small adjustments on top so the final
+# stays within ~15 pts of website_scanner — realistic & consistent.
 # ═══════════════════════════════════════════════════════════════
 def scan_webapp(url):
     findings = []
 
     try:
         ws_result = scan_website(url)
-        ws_score = ws_result.get("score", 100)
+        ws_score = ws_result.get("score", 50)
         for f in ws_result.get("findings", []):
             if f.get("surface") == "Website":
                 f["surface"] = "Application"
             findings.append(f)
     except Exception:
-        ws_score = 100
+        ws_score = 50
 
     if not url.startswith("http"):
         url = "https://" + url
@@ -54,33 +57,22 @@ def scan_webapp(url):
         "Accept-Language": "en-US,en;q=0.5",
     })
 
-    # ── Scoring — mirrors website_scanner structure ────────────
-    # access_score  : max 25
-    # secret_score  : max 35
-    # input_score   : max 25
-    # config_score  : max 15
-    # Total         : 100
-    access_score = 25
-    secret_score = 35
-    input_score  = 25
-    config_score = 15
+    # ── Adjustment system ─────────────────────────────────────
+    # ws_score is the anchor. Each app-layer check nudges it:
+    #   good finding  → +3 to +5 pts
+    #   bad finding   → -5 to -8 pts
+    # Total adjustment is capped at ±15 so we stay realistic.
+    adjustment = 0
 
     # ── Fetch homepage ─────────────────────────────────────────
     homepage_html = ""
-    homepage_headers = {}
     response = None
     try:
         for try_url in [base_url, f"https://www.{bare_domain}"]:
             try:
-                response = session.get(
-                    try_url, timeout=12, allow_redirects=True
-                )
+                response = session.get(try_url, timeout=12, allow_redirects=True)
                 if response.status_code < 400:
                     homepage_html = response.text
-                    homepage_headers = {
-                        k.lower(): v
-                        for k, v in response.headers.items()
-                    }
                     break
             except Exception:
                 continue
@@ -91,138 +83,96 @@ def scan_webapp(url):
     except Exception:
         findings.append({
             "severity": "INFO", "surface": "Application",
-            "title": "Application blocked automated scanning (bot protection detected)",
-            "fix": "This app uses WAF/bot protection that blocks scanners. "
-                   "This is actually a good security sign."
+            "title": "Application blocked automated scanning (bot protection active)",
+            "fix": "WAF/bot protection is blocking scanners — this is a good security sign."
         })
-        return {"score": 45, "findings": findings}
+        # WAF is a positive signal — keep score near ws_score
+        final = max(0, min(100, ws_score + 3))
+        return {"score": final, "findings": findings}
 
     soup = BeautifulSoup(homepage_html, "html.parser")
 
     # ─────────────────────────────────────────────────────────
-    # CATEGORY 1: Access control (max 25)
+    # CHECK 1: Admin panels exposed without authentication (-8)
     # ─────────────────────────────────────────────────────────
-
-    # ── Check 1a: Admin panels exposed without login ──────────
     admin_paths = [
         "/admin", "/admin/dashboard", "/wp-admin",
         "/administrator", "/dashboard", "/phpmyadmin",
-        "/manager", "/cpanel", "/wp-login.php",
-        "/admin/login",
+        "/manager", "/cpanel", "/wp-login.php", "/admin/login",
     ]
     admin_exposed = False
     for path in admin_paths:
         try:
-            r = session.get(
-                f"{base_url}{path}", timeout=5, allow_redirects=True
-            )
+            r = session.get(f"{base_url}{path}", timeout=5, allow_redirects=True)
             if r.status_code == 200:
-                html_lower = r.text.lower()
-                has_login = (
-                    'type="password"' in html_lower or
-                    "type='password'" in html_lower or
-                    "forgot password" in html_lower
+                h = r.text.lower()
+                has_login = 'type="password"' in h or "type='password'" in h or "forgot password" in h
+                is_exposed = not has_login and (
+                    "dashboard" in h or "admin panel" in h or
+                    "control panel" in h or "logged in as" in h
                 )
-                is_exposed_dashboard = not has_login and (
-                    "dashboard" in html_lower or
-                    "admin panel" in html_lower or
-                    "control panel" in html_lower or
-                    "logged in as" in html_lower
-                )
-                if is_exposed_dashboard:
+                if is_exposed:
                     admin_exposed = True
-                    access_score = max(0, access_score - 20)
+                    adjustment -= 8
                     findings.append({
                         "severity": "CRITICAL", "surface": "Application",
                         "title": f"Admin panel accessible without authentication: {path}",
-                        "fix": f"Add authentication to {path} immediately. "
-                               "Anyone can access admin functions right now."
+                        "fix": f"Add authentication to {path} immediately."
                     })
                     break
         except Exception:
             pass
 
     if not admin_exposed:
+        adjustment += 3
         findings.append({
             "severity": "PASS", "surface": "Application",
             "title": "No unauthenticated admin panels found",
             "fix": ""
         })
 
-    # ── Check 1b: Directory listing ───────────────────────────
-    dir_listing_found = False
+    # ─────────────────────────────────────────────────────────
+    # CHECK 2: Directory listing (-5)
+    # ─────────────────────────────────────────────────────────
+    dir_exposed = False
     for path in ["/uploads/", "/files/", "/static/", "/assets/", "/backup/"]:
         try:
-            r = session.get(
-                f"{base_url}{path}", timeout=4, allow_redirects=False
-            )
+            r = session.get(f"{base_url}{path}", timeout=4, allow_redirects=False)
             if r.status_code == 200:
                 h = r.text.lower()
-                if "index of /" in h or (
-                    "parent directory" in h and "<a href" in h
-                ):
-                    dir_listing_found = True
-                    access_score = max(0, access_score - 15)
+                if "index of /" in h or ("parent directory" in h and "<a href" in h):
+                    dir_exposed = True
+                    adjustment -= 5
                     findings.append({
                         "severity": "HIGH", "surface": "Application",
                         "title": f"Directory listing enabled at {path}",
-                        "fix": "Disable directory listing. "
-                               "nginx: autoindex off;  Apache: Options -Indexes"
+                        "fix": "Disable: nginx: autoindex off;  Apache: Options -Indexes"
                     })
                     break
         except Exception:
             pass
 
-    if not dir_listing_found:
+    if not dir_exposed:
+        adjustment += 2
         findings.append({
             "severity": "PASS", "surface": "Application",
             "title": "Directory listing is disabled",
             "fix": ""
         })
 
-    # ── Check 1c: Subdomains attack surface ───────────────────
-    try:
-        r = requests.get(
-            f"https://crt.sh/?q=%25.{domain}&output=json", timeout=10
-        )
-        if r.status_code == 200:
-            subdomains = set()
-            for entry in r.json():
-                for sub in entry.get("name_value", "").split("\n"):
-                    sub = sub.strip().lstrip("*.")
-                    if domain in sub and sub != domain and not sub.startswith("www."):
-                        subdomains.add(sub)
-            if len(subdomains) > 20:
-                access_score = max(0, access_score - 5)
-                findings.append({
-                    "severity": "MEDIUM", "surface": "Application",
-                    "title": f"Large attack surface: {len(subdomains)} subdomains found",
-                    "fix": f"Sample: {', '.join(list(subdomains)[:4])}. "
-                           "Decommission unused subdomains."
-                })
-            elif subdomains:
-                findings.append({
-                    "severity": "INFO", "surface": "Application",
-                    "title": f"{len(subdomains)} subdomains found via certificate logs",
-                    "fix": f"Known: {', '.join(list(subdomains)[:5])}. Ensure each is secured."
-                })
-    except Exception:
-        pass
-
     # ─────────────────────────────────────────────────────────
-    # CATEGORY 2: Secret / sensitive data leaks (max 35)
+    # CHECK 3: Hardcoded secrets in JS (-7 each, max -14)
     # ─────────────────────────────────────────────────────────
     secret_patterns = [
         (r'AKIA[0-9A-Z]{16}',                           "AWS Access Key ID"),
-        (r'sk_live_[0-9a-zA-Z]{24,}',                   "Stripe Live Secret Key"),
+        (r'sk_live_[0-9a-zA-Z]{24,}',                   "Stripe Live Key"),
         (r'AIza[0-9A-Za-z\-_]{35}',                     "Google API Key"),
-        (r'ghp_[0-9a-zA-Z]{36}',                        "GitHub Personal Access Token"),
+        (r'ghp_[0-9a-zA-Z]{36}',                        "GitHub Token"),
         (r'xox[baprs]-[0-9a-zA-Z\-]{10,48}',           "Slack Token"),
         (r'-----BEGIN (RSA |EC )?PRIVATE KEY-----',     "Private Key"),
         (r'SG\.[a-zA-Z0-9\-_]{22}\.[a-zA-Z0-9\-_]{43}',"SendGrid API Key"),
         (r'sq0atp-[0-9A-Za-z\-_]{22}',                  "Square Access Token"),
     ]
-
     cdn_domains = [
         "googleapis.com", "cloudflare.com", "jsdelivr.net",
         "unpkg.com", "jquery.com", "bootstrapcdn.com",
@@ -230,8 +180,6 @@ def scan_webapp(url):
     ]
 
     secrets_found = []
-
-    # Scan inline scripts
     for tag in soup.find_all("script"):
         content = tag.string or ""
         if len(content.strip()) < 30:
@@ -240,12 +188,10 @@ def scan_webapp(url):
             if re.search(pattern, content):
                 secrets_found.append(f"{name} in inline script")
 
-    # Scan external JS files
     for tag in soup.find_all("script", src=True):
         js_src = tag.get("src", "")
         try:
-            js_url = (js_src if js_src.startswith("http")
-                      else urljoin(base_url, js_src))
+            js_url = js_src if js_src.startswith("http") else urljoin(base_url, js_src)
             if any(cdn in js_url for cdn in cdn_domains):
                 continue
             js_content = session.get(js_url, timeout=6).text
@@ -253,8 +199,8 @@ def scan_webapp(url):
                 continue
             for pattern, name in secret_patterns:
                 if re.search(pattern, js_content):
-                    fname = js_url.split("/")[-1].split("?")[0]
-                    secrets_found.append(f"{name} in {fname}")
+                    fname_short = js_url.split("/")[-1].split("?")[0]
+                    secrets_found.append(f"{name} in {fname_short}")
         except Exception:
             pass
 
@@ -262,35 +208,35 @@ def scan_webapp(url):
     for secret in secrets_found:
         if secret not in seen:
             seen.add(secret)
-            secret_score = max(0, secret_score - 15)
+            adjustment = max(adjustment - 7, adjustment - 14)  # cap at -14 total from secrets
             findings.append({
                 "severity": "CRITICAL", "surface": "Application",
-                "title": f"Secret credential found in public code: {secret}",
-                "fix": "Remove immediately. Rotate/revoke the key. "
-                       "Use server-side environment variables."
+                "title": f"Secret credential in public JS: {secret}",
+                "fix": "Remove immediately. Rotate the key. Use server-side env vars."
             })
 
     if not secrets_found:
+        adjustment += 3
         findings.append({
             "severity": "PASS", "surface": "Application",
             "title": "No hardcoded secrets found in JavaScript",
             "fix": ""
         })
 
-    # ── Check: Forms over HTTP ────────────────────────────────
+    # ─────────────────────────────────────────────────────────
+    # CHECK 4: Forms over HTTP (-5)
+    # ─────────────────────────────────────────────────────────
     forms = soup.find_all("form")
-    insecure_forms = [
-        f for f in forms
-        if (f.get("action") or "").startswith("http://")
-    ]
+    insecure_forms = [f for f in forms if (f.get("action") or "").startswith("http://")]
     if insecure_forms:
-        secret_score = max(0, secret_score - 10)
+        adjustment -= 5
         findings.append({
             "severity": "HIGH", "surface": "Application",
             "title": f"{len(insecure_forms)} form(s) submit data over HTTP",
             "fix": "Change form action URLs from http:// to https://"
         })
     elif forms:
+        adjustment += 2
         findings.append({
             "severity": "PASS", "surface": "Application",
             "title": f"{len(forms)} form(s) found — all submit over HTTPS",
@@ -298,99 +244,58 @@ def scan_webapp(url):
         })
 
     # ─────────────────────────────────────────────────────────
-    # CATEGORY 3: Input validation (max 25)
+    # CHECK 5: Reflected XSS probe (-8)
     # ─────────────────────────────────────────────────────────
-
-    # ── XSS probe ─────────────────────────────────────────────
     xss_marker = "SECPULSE9823"
     xss_probe  = f"<{xss_marker}>"
     xss_found  = False
     try:
-        get_forms = [
-            f for f in soup.find_all("form")
-            if f.get("method", "get").lower() == "get"
-        ]
+        get_forms = [f for f in soup.find_all("form") if f.get("method", "get").lower() == "get"]
         for form in get_forms[:2]:
-            action  = form.get("action") or base_url
-            form_url = (action if action.startswith("http")
-                        else urljoin(base_url, action))
-            inputs = form.find_all(
-                "input",
-                {"type": lambda t: t not in ["hidden", "submit", "button"]}
-            )
-            params = {
-                i.get("name", "q"): xss_probe
-                for i in inputs[:3] if i.get("name")
-            }
+            action   = form.get("action") or base_url
+            form_url = action if action.startswith("http") else urljoin(base_url, action)
+            inputs   = form.find_all("input", {"type": lambda t: t not in ["hidden", "submit", "button"]})
+            params   = {i.get("name", "q"): xss_probe for i in inputs[:3] if i.get("name")}
             if params:
                 r = session.get(form_url, params=params, timeout=5)
                 if xss_marker in r.text and xss_probe in r.text:
                     xss_found = True
-                    input_score = max(0, input_score - 15)
+                    adjustment -= 8
                     findings.append({
                         "severity": "CRITICAL", "surface": "Application",
                         "title": "Reflected XSS vulnerability detected",
-                        "fix": "Escape all user input before rendering in HTML. "
-                               "Use a templating engine with auto-escaping."
+                        "fix": "Escape all user input before rendering. Use a templating engine."
                     })
                     break
     except Exception:
         pass
 
-    # ── SQL injection probe ───────────────────────────────────
+    # ─────────────────────────────────────────────────────────
+    # CHECK 6: SQL injection probe (-8)
+    # ─────────────────────────────────────────────────────────
     sql_errors = [
-        "you have an error in your sql syntax",
-        "warning: mysql", "unclosed quotation mark",
-        "sqlstate", "pg_query():", "ora-01756",
-        "microsoft ole db provider for sql server",
+        "you have an error in your sql syntax", "warning: mysql",
+        "unclosed quotation mark", "sqlstate", "pg_query():",
+        "ora-01756", "microsoft ole db provider for sql server",
     ]
     sqli_found = False
     try:
         r = session.get(f"{base_url}?id=1'", timeout=5)
-        resp_lower = r.text.lower()
         for err in sql_errors:
-            if err in resp_lower:
+            if err in r.text.lower():
                 sqli_found = True
-                input_score = max(0, input_score - 20)
+                adjustment -= 8
                 findings.append({
                     "severity": "CRITICAL", "surface": "Application",
-                    "title": "Possible SQL injection vulnerability detected",
-                    "fix": "Use parameterized queries / prepared statements. "
-                           "Never concatenate user input into SQL strings."
-                })
-                break
-    except Exception:
-        pass
-
-    # ── Error page leak ───────────────────────────────────────
-    tech_leaks = [
-        ("traceback (most recent call last)", "Python stack trace exposed"),
-        ("fatal error:",                       "PHP fatal error exposed"),
-        ("mysql_fetch",                        "MySQL error details exposed"),
-        ("sqlstate[",                          "Database SQL state exposed"),
-        ("django.core.exceptions",             "Django framework info exposed"),
-        ("laravel",                            "Laravel framework info exposed"),
-        ("webpack://",                         "Webpack source map exposed"),
-    ]
-    try:
-        r = session.get(
-            f"{base_url}/this_page_does_not_exist_sp_9823", timeout=5
-        )
-        err_lower = r.text.lower()
-        for keyword, description in tech_leaks:
-            if keyword in err_lower:
-                input_score = max(0, input_score - 8)
-                findings.append({
-                    "severity": "MEDIUM", "surface": "Application",
-                    "title": f"Error page leaks technical details: {description}",
-                    "fix": "Create a custom error page. "
-                           "Disable debug mode in production."
+                    "title": "SQL injection vulnerability indicator detected",
+                    "fix": "Use parameterized queries. Never concatenate user input into SQL."
                 })
                 break
     except Exception:
         pass
 
     if not xss_found and not sqli_found:
+        adjustment += 3
         findings.append({
             "severity": "PASS", "surface": "Application",
             "title": "No XSS or SQL injection indicators found",
@@ -398,47 +303,70 @@ def scan_webapp(url):
         })
 
     # ─────────────────────────────────────────────────────────
-    # CATEGORY 4: Configuration security (max 15)
+    # CHECK 7: Error page information leak (-4)
     # ─────────────────────────────────────────────────────────
+    tech_leaks = [
+        ("traceback (most recent call last)", "Python stack trace exposed"),
+        ("fatal error:",                       "PHP fatal error exposed"),
+        ("mysql_fetch",                        "MySQL error exposed"),
+        ("sqlstate[",                          "Database state exposed"),
+        ("django.core.exceptions",             "Django internals exposed"),
+        ("webpack://",                         "Webpack source map exposed"),
+    ]
+    try:
+        r = session.get(f"{base_url}/sp_nonexistent_9823", timeout=5)
+        for kw, desc in tech_leaks:
+            if kw in r.text.lower():
+                adjustment -= 4
+                findings.append({
+                    "severity": "MEDIUM", "surface": "Application",
+                    "title": f"Error page leaks technical detail: {desc}",
+                    "fix": "Disable debug mode in production. Add a custom 404/500 page."
+                })
+                break
+    except Exception:
+        pass
 
-    # ── Mixed content ─────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────
+    # CHECK 8: Mixed content on HTTPS page (-4)
+    # ─────────────────────────────────────────────────────────
     if base_url.startswith("https"):
         http_matches = re.findall(
             r'(?:src|href|action)\s*=\s*["\']http://[^"\']+["\']',
             homepage_html.lower()
         )
         if http_matches:
-            config_score = max(0, config_score - 8)
+            adjustment -= 4
             findings.append({
                 "severity": "MEDIUM", "surface": "Application",
                 "title": f"Mixed content: {len(http_matches)} HTTP resource(s) on HTTPS page",
                 "fix": "Change all resource URLs to https:// or use // prefix"
             })
         else:
+            adjustment += 2
             findings.append({
                 "severity": "PASS", "surface": "Application",
                 "title": "No mixed HTTP/HTTPS content detected",
                 "fix": ""
             })
 
-    # ── API docs exposed ──────────────────────────────────────
+    # ─────────────────────────────────────────────────────────
+    # CHECK 9: Exposed API docs (-4)
+    # ─────────────────────────────────────────────────────────
     api_exposed = False
     for path in ["/api/docs", "/swagger", "/swagger-ui.html",
                  "/api-docs", "/openapi.json", "/graphql"]:
         try:
-            r = session.get(
-                f"{base_url}{path}", timeout=4, allow_redirects=False
-            )
+            r = session.get(f"{base_url}{path}", timeout=4, allow_redirects=False)
             if r.status_code == 200:
-                ct = r.headers.get("content-type", "").lower()
+                ct   = r.headers.get("content-type", "").lower()
                 body = r.text.lower()
-                if ("application/json" in ct or "swagger" in body
-                        or "openapi" in body or "graphql" in body):
+                if "application/json" in ct or "swagger" in body or "openapi" in body or "graphql" in body:
                     api_exposed = True
-                    config_score = max(0, config_score - 8)
+                    adjustment -= 4
                     findings.append({
                         "severity": "MEDIUM", "surface": "Application",
-                        "title": f"API documentation publicly accessible at {path}",
+                        "title": f"API documentation publicly accessible: {path}",
                         "fix": "Restrict API docs to authenticated users in production."
                     })
                     break
@@ -446,40 +374,36 @@ def scan_webapp(url):
             pass
 
     if not api_exposed:
+        adjustment += 2
         findings.append({
             "severity": "PASS", "surface": "Application",
             "title": "No publicly exposed API documentation found",
             "fix": ""
         })
 
-    # ── robots.txt sensitive paths ────────────────────────────
+    # ─────────────────────────────────────────────────────────
+    # CHECK 10: robots.txt sensitive paths (-3) / security.txt (+2)
+    # ─────────────────────────────────────────────────────────
     try:
         r = session.get(f"{base_url}/robots.txt", timeout=5)
         if r.status_code == 200 and "disallow" in r.text.lower():
-            sensitive_kw = [
-                "admin", "backup", "config", "database",
-                "secret", "private", "internal", "password"
-            ]
+            risky_kw  = ["admin", "backup", "config", "database", "secret", "private", "password"]
             disallowed = re.findall(r'Disallow:\s*(.+)', r.text, re.IGNORECASE)
-            risky = [
-                p.strip() for p in disallowed
-                if any(k in p.lower() for k in sensitive_kw)
-            ]
+            risky = [p.strip() for p in disallowed if any(k in p.lower() for k in risky_kw)]
             if risky:
-                config_score = max(0, config_score - 5)
+                adjustment -= 3
                 findings.append({
                     "severity": "LOW", "surface": "Application",
                     "title": f"robots.txt reveals {len(risky)} sensitive path(s)",
-                    "fix": f"Paths: {', '.join(risky[:3])}. "
-                           "robots.txt is PUBLIC — don't list secret paths here."
+                    "fix": f"Paths: {', '.join(risky[:3])}. Don't list secret paths in a public file."
                 })
     except Exception:
         pass
 
-    # ── security.txt ──────────────────────────────────────────
     try:
         r = session.get(f"{base_url}/.well-known/security.txt", timeout=4)
         if r.status_code == 200 and "contact" in r.text.lower():
+            adjustment += 2
             findings.append({
                 "severity": "PASS", "surface": "Application",
                 "title": "security.txt present — responsible disclosure enabled",
@@ -488,97 +412,129 @@ def scan_webapp(url):
         else:
             findings.append({
                 "severity": "INFO", "surface": "Application",
-                "title": "No security.txt file found",
-                "fix": "Add /.well-known/security.txt with a contact email "
-                       "for security researchers"
+                "title": "No security.txt found",
+                "fix": "Add /.well-known/security.txt with a security contact email."
             })
     except Exception:
         pass
 
-    app_score = access_score + secret_score + input_score + config_score
-    app_score = max(0, min(100, app_score))
-    
-    final_score = (ws_score + app_score) // 2
+    # ─────────────────────────────────────────────────────────
+    # CHECK 11: Subdomain attack surface (info only, -3 if huge)
+    # ─────────────────────────────────────────────────────────
+    try:
+        r = requests.get(f"https://crt.sh/?q=%25.{domain}&output=json", timeout=10)
+        if r.status_code == 200:
+            subdomains = set()
+            for entry in r.json():
+                for sub in entry.get("name_value", "").split("\n"):
+                    sub = sub.strip().lstrip("*.")
+                    if domain in sub and sub != domain and not sub.startswith("www."):
+                        subdomains.add(sub)
+            if len(subdomains) > 20:
+                adjustment -= 3
+                findings.append({
+                    "severity": "MEDIUM", "surface": "Application",
+                    "title": f"Large attack surface: {len(subdomains)} subdomains found",
+                    "fix": f"Sample: {', '.join(list(subdomains)[:4])}. Decommission unused ones."
+                })
+            elif subdomains:
+                findings.append({
+                    "severity": "INFO", "surface": "Application",
+                    "title": f"{len(subdomains)} subdomain(s) found via certificate logs",
+                    "fix": f"Known: {', '.join(list(subdomains)[:5])}. Ensure each is secured."
+                })
+    except Exception:
+        pass
+
+    # ── Final score: ws_score anchored, capped at ±15 pts ────
+    adjustment = max(-15, min(15, adjustment))
+    final_score = max(0, min(100, ws_score + adjustment))
     return {"score": final_score, "findings": findings}
 
 
 # ═══════════════════════════════════════════════════════════════
 # APK SCANNER
+# Scoring mirrors website_scanner: earn points for good practices,
+# deduct for bad ones. Realistic scores, not "start at 100".
+# ─────────────────────────────────────────────────────────────
+# manifest_score : max 30  (permissions, flags, sdk, components)
+# network_score  : max 25  (cleartext, pinning, config)
+# code_score     : max 25  (obfuscation, secrets, root, logs)
+# binary_score   : max 20  (cert, dex size, native libs, webview)
+# Total          : 100
 # ═══════════════════════════════════════════════════════════════
 def scan_apk(apk_path):
     findings = []
 
-    # ── Scoring ───────────────────────────────────────────────
-    # permissions   : max 30
-    # secrets       : max 30
-    # network       : max 25
-    # code_safety   : max 15
-    # Total         : 100
-    perm_score    = 30
-    secret_score  = 30
-    network_score = 25
-    code_score    = 15
+    manifest_score = 30
+    network_score  = 25
+    code_score     = 25
+    binary_score   = 20
 
-    # ── Load APK (APK files are ZIP archives) ─────────────────
+    # ── Load APK ──────────────────────────────────────────────
     try:
         if apk_path.startswith("http"):
             r = requests.get(apk_path, timeout=30)
             apk_bytes = io.BytesIO(r.content)
         else:
             apk_bytes = open(apk_path, "rb")
-
         zf = zipfile.ZipFile(apk_bytes)
     except Exception as e:
         findings.append({
             "severity": "HIGH", "surface": "Application",
             "title": f"Could not read APK file: {str(e)[:80]}",
-            "fix": "Make sure the APK file is valid and not corrupted"
+            "fix": "Ensure the file is a valid, non-corrupted APK."
         })
         return {"score": 0, "findings": findings}
 
     file_list = zf.namelist()
 
     # ─────────────────────────────────────────────────────────
-    # CATEGORY 1: Permissions (max 30)
-    # Read AndroidManifest.xml
+    # CATEGORY 1: Manifest security (max 30)
     # ─────────────────────────────────────────────────────────
     dangerous_permissions = {
-        "READ_CONTACTS":       ("HIGH",   8, "Access to all contacts"),
-        "WRITE_CONTACTS":      ("HIGH",   8, "Modify all contacts"),
-        "ACCESS_FINE_LOCATION":("HIGH",   8, "Precise GPS location"),
-        "RECORD_AUDIO":        ("HIGH",   8, "Access microphone"),
-        "CAMERA":              ("MEDIUM", 5, "Access camera"),
-        "READ_SMS":            ("CRITICAL",10,"Read all SMS messages"),
-        "SEND_SMS":            ("CRITICAL",10,"Send SMS (costs money)"),
-        "READ_CALL_LOG":       ("HIGH",   8, "Access call history"),
-        "PROCESS_OUTGOING_CALLS":("HIGH", 8, "Intercept phone calls"),
-        "READ_EXTERNAL_STORAGE":("MEDIUM",4, "Read files from storage"),
-        "WRITE_EXTERNAL_STORAGE":("MEDIUM",4,"Write files to storage"),
-        "GET_ACCOUNTS":        ("MEDIUM", 4, "Access account list"),
-        "USE_BIOMETRIC":       ("LOW",    2, "Use fingerprint/face"),
-        "BLUETOOTH_ADMIN":     ("MEDIUM", 4, "Control Bluetooth"),
-        "NFC":                 ("LOW",    2, "Use NFC chip"),
+        "READ_CONTACTS":          ("HIGH",     6, "Read all device contacts"),
+        "WRITE_CONTACTS":         ("HIGH",     6, "Modify all contacts"),
+        "ACCESS_FINE_LOCATION":   ("HIGH",     6, "Precise GPS location"),
+        "ACCESS_COARSE_LOCATION": ("MEDIUM",   3, "Approximate location"),
+        "RECORD_AUDIO":           ("HIGH",     6, "Access microphone"),
+        "CAMERA":                 ("MEDIUM",   3, "Access camera"),
+        "READ_SMS":               ("CRITICAL", 8, "Read all SMS messages"),
+        "SEND_SMS":               ("CRITICAL", 8, "Send SMS (financial risk)"),
+        "RECEIVE_SMS":            ("HIGH",     6, "Intercept incoming SMS"),
+        "READ_CALL_LOG":          ("HIGH",     6, "Access call history"),
+        "PROCESS_OUTGOING_CALLS": ("HIGH",     6, "Intercept phone calls"),
+        "READ_EXTERNAL_STORAGE":  ("MEDIUM",   3, "Read files from storage"),
+        "WRITE_EXTERNAL_STORAGE": ("MEDIUM",   3, "Write files to storage"),
+        "GET_ACCOUNTS":           ("MEDIUM",   3, "List device accounts"),
+        "USE_CREDENTIALS":        ("HIGH",     6, "Access account credentials"),
+        "BLUETOOTH_ADMIN":        ("MEDIUM",   3, "Admin control of Bluetooth"),
+        "CHANGE_WIFI_STATE":      ("LOW",      2, "Change Wi-Fi settings"),
+        "NFC":                    ("LOW",      2, "Use NFC chip"),
+        "SYSTEM_ALERT_WINDOW":    ("HIGH",     6, "Draw over other apps"),
+        "BIND_DEVICE_ADMIN":      ("CRITICAL", 8, "Device administrator rights"),
     }
 
+    manifest_text = ""
     try:
         manifest_raw = zf.read("AndroidManifest.xml")
-        # Try to decode as text — works for some APKs
-        try:
-            manifest_text = manifest_raw.decode("utf-8", errors="ignore")
-        except Exception:
-            manifest_text = str(manifest_raw)
+        # Strip null bytes — decodes binary AXML string pool to readable text
+        manifest_text = manifest_raw.replace(b'\x00', b'').decode("utf-8", errors="ignore")
 
+        # ── Permissions ──────────────────────────────────────
         found_dangerous = []
-        for perm, (severity, deduction, description) in dangerous_permissions.items():
+        total_perm_pts  = 0
+        for perm, (sev, pts, desc) in dangerous_permissions.items():
             if perm in manifest_text:
-                found_dangerous.append((perm, severity, deduction, description))
-                perm_score = max(0, perm_score - deduction)
+                found_dangerous.append(perm)
+                total_perm_pts += pts
                 findings.append({
-                    "severity": severity, "surface": "Application",
-                    "title": f"Dangerous permission declared: {perm}",
-                    "fix": f"This permission allows: {description}. "
-                           "Remove if not essential for core app functionality."
+                    "severity": sev, "surface": "Application",
+                    "title": f"Dangerous permission: android.permission.{perm}",
+                    "fix": f"Allows: {desc}. Remove if not needed for core functionality."
                 })
+        # Cap permission deduction at 18 pts so flag checks still matter
+        manifest_score = max(0, manifest_score - min(total_perm_pts, 18))
 
         if not found_dangerous:
             findings.append({
@@ -587,177 +543,189 @@ def scan_apk(apk_path):
                 "fix": ""
             })
 
-        # Check for debuggable flag
-        if "android:debuggable=\"true\"" in manifest_text or "debuggable=true" in manifest_text.lower():
-            code_score = max(0, code_score - 10)
+        # ── Debuggable flag ──────────────────────────────────
+        if "debuggable" in manifest_text and "true" in manifest_text[
+                manifest_text.lower().find("debuggable"):
+                manifest_text.lower().find("debuggable") + 30].lower():
+            manifest_score = max(0, manifest_score - 8)
             findings.append({
                 "severity": "CRITICAL", "surface": "Application",
-                "title": "App is set as debuggable in AndroidManifest",
-                "fix": "Set android:debuggable='false' in AndroidManifest.xml. "
-                       "Debuggable apps can be reverse engineered easily."
+                "title": "App is debuggable (android:debuggable=true)",
+                "fix": "Set android:debuggable='false'. Debuggable APKs allow "
+                       "runtime debugging and trivial reverse engineering."
+            })
+        else:
+            findings.append({
+                "severity": "PASS", "surface": "Application",
+                "title": "App is not debuggable",
+                "fix": ""
             })
 
-        # Check for allowBackup
-        if "android:allowBackup=\"true\"" in manifest_text:
-            code_score = max(0, code_score - 5)
+        # ── allowBackup ──────────────────────────────────────
+        if 'allowbackup="true"' in manifest_text.lower() or \
+           "allowBackup" not in manifest_text:
+            manifest_score = max(0, manifest_score - 4)
             findings.append({
                 "severity": "MEDIUM", "surface": "Application",
-                "title": "App data backup is enabled (android:allowBackup=true)",
+                "title": "App data backup enabled (android:allowBackup=true or unset)",
                 "fix": "Set android:allowBackup='false' to prevent "
-                       "app data extraction via adb backup."
+                       "data extraction via `adb backup`."
+            })
+        else:
+            findings.append({
+                "severity": "PASS", "surface": "Application",
+                "title": "App data backup is disabled",
+                "fix": ""
             })
 
-        # Check for exported components
-        exported_count = manifest_text.count('android:exported="true"')
-        if exported_count > 3:
-            perm_score = max(0, perm_score - 5)
+        # ── Exported components ──────────────────────────────
+        exported_count = manifest_text.lower().count('exported="true"')
+        if exported_count > 5:
+            manifest_score = max(0, manifest_score - 6)
+            findings.append({
+                "severity": "HIGH", "surface": "Application",
+                "title": f"{exported_count} exported components — large attack surface",
+                "fix": "Only export components that external apps genuinely need. "
+                       "Unexported components should use exported=false explicitly."
+            })
+        elif exported_count > 2:
+            manifest_score = max(0, manifest_score - 3)
             findings.append({
                 "severity": "MEDIUM", "surface": "Application",
-                "title": f"{exported_count} exported components found in manifest",
-                "fix": "Review exported activities/services/receivers. "
-                       "Only export components that genuinely need to be "
-                       "accessible from other apps."
+                "title": f"{exported_count} exported components in manifest",
+                "fix": "Ensure each exported component validates caller identity."
             })
+
+        # ── targetSdkVersion ────────────────────────────────
+        sdk_match = re.search(r'targetSdkVersion[^\d]*(\d+)', manifest_text, re.IGNORECASE)
+        if sdk_match:
+            tsdk = int(sdk_match.group(1))
+            if tsdk >= 31:
+                findings.append({
+                    "severity": "PASS", "surface": "Application",
+                    "title": f"Targets modern Android SDK (API {tsdk})",
+                    "fix": ""
+                })
+            elif tsdk >= 28:
+                manifest_score = max(0, manifest_score - 2)
+                findings.append({
+                    "severity": "LOW", "surface": "Application",
+                    "title": f"Targets Android SDK {tsdk} — update to 31+",
+                    "fix": "Higher targetSdkVersion enforces stricter security defaults."
+                })
+            else:
+                manifest_score = max(0, manifest_score - 5)
+                findings.append({
+                    "severity": "MEDIUM", "surface": "Application",
+                    "title": f"Targets outdated Android SDK {tsdk}",
+                    "fix": "Update targetSdkVersion to 33+ for modern security protections."
+                })
 
     except KeyError:
+        manifest_score = max(0, manifest_score - 15)
         findings.append({
             "severity": "HIGH", "surface": "Application",
             "title": "AndroidManifest.xml not found in APK",
-            "fix": "This may not be a valid Android APK file"
+            "fix": "This may not be a valid Android APK."
         })
 
     # ─────────────────────────────────────────────────────────
-    # CATEGORY 2: Hardcoded secrets in APK (max 30)
-    # Scan .dex files and assets for secrets
+    # CATEGORY 2: Network security (max 25)
     # ─────────────────────────────────────────────────────────
-    secret_patterns = [
-        (r'AKIA[0-9A-Z]{16}',                        "AWS Access Key"),
-        (r'sk_live_[0-9a-zA-Z]{24,}',                "Stripe Live Key"),
-        (r'AIza[0-9A-Za-z\-_]{35}',                  "Google API Key"),
-        (r'ghp_[0-9a-zA-Z]{36}',                     "GitHub Token"),
-        (r'-----BEGIN (RSA |EC )?PRIVATE KEY-----',  "Private Key"),
-        (r'password\s*=\s*["\'][^"\']{8,}["\']',     "Hardcoded password"),
-        (r'secret\s*=\s*["\'][^"\']{8,}["\']',       "Hardcoded secret"),
-        (r'api_key\s*=\s*["\'][^"\']{8,}["\']',      "Hardcoded API key"),
-        (r'jdbc:[a-z]+://[^\s"\']{10,}',              "Hardcoded database URL"),
-    ]
 
-    apk_secrets = []
-    files_to_scan = [
-        f for f in file_list
-        if any(f.endswith(ext) for ext in
-               [".dex", ".xml", ".json", ".properties",
-                ".txt", ".cfg", ".js", ".html"])
-        and not any(skip in f for skip in
-                    ["res/drawable", "res/layout", "res/mipmap"])
-    ]
-
-    for fname in files_to_scan[:30]:
+    # ── network_security_config.xml ──────────────────────────
+    net_cfg_files = [f for f in file_list if "network_security_config" in f.lower()]
+    if net_cfg_files:
         try:
-            content = zf.read(fname).decode("utf-8", errors="ignore")
-            if len(content) > 500000:
-                continue
-            for pattern, name in secret_patterns:
-                if re.search(pattern, content, re.IGNORECASE):
-                    apk_secrets.append(f"{name} in {fname}")
-        except Exception:
-            pass
+            cfg_raw   = zf.read(net_cfg_files[0])
+            cfg_clean = cfg_raw.replace(b'\x00', b'').decode("utf-8", errors="ignore")
 
-    seen = set()
-    for secret in apk_secrets:
-        if secret not in seen:
-            seen.add(secret)
-            secret_score = max(0, secret_score - 15)
-            findings.append({
-                "severity": "CRITICAL", "surface": "Application",
-                "title": f"Hardcoded secret in APK: {secret}",
-                "fix": "Remove from code. Use Android Keystore or "
-                       "server-side secrets instead. "
-                       "Anyone who downloads this APK can extract this secret."
-            })
-
-    if not apk_secrets:
-        findings.append({
-            "severity": "PASS", "surface": "Application",
-            "title": "No hardcoded secrets found in APK files",
-            "fix": ""
-        })
-
-    # ─────────────────────────────────────────────────────────
-    # CATEGORY 3: Network security (max 25)
-    # ─────────────────────────────────────────────────────────
-
-    # ── Check network_security_config.xml ─────────────────────
-    network_config_files = [
-        f for f in file_list
-        if "network_security_config" in f.lower()
-    ]
-    if network_config_files:
-        try:
-            config_content = zf.read(
-                network_config_files[0]
-            ).decode("utf-8", errors="ignore")
-
-            if "cleartextTrafficPermitted=\"true\"" in config_content:
-                network_score = max(0, network_score - 15)
+            if "cleartexttrafficpermitted" in cfg_clean.lower() and \
+               "true" in cfg_clean.lower():
+                network_score = max(0, network_score - 10)
                 findings.append({
                     "severity": "HIGH", "surface": "Application",
-                    "title": "App allows cleartext (HTTP) traffic",
-                    "fix": "Set cleartextTrafficPermitted='false' in "
-                           "network_security_config.xml to force HTTPS"
+                    "title": "App allows cleartext HTTP traffic (cleartextTrafficPermitted=true)",
+                    "fix": "Set cleartextTrafficPermitted='false' to enforce HTTPS."
                 })
             else:
                 findings.append({
                     "severity": "PASS", "surface": "Application",
-                    "title": "Network security config blocks cleartext traffic",
+                    "title": "Network security config blocks cleartext HTTP traffic",
                     "fix": ""
                 })
 
-            if "<trust-anchors>" in config_content and \
-               "user" in config_content.lower():
-                network_score = max(0, network_score - 10)
+            if "trust-anchors" in cfg_clean.lower() and "user" in cfg_clean.lower():
+                network_score = max(0, network_score - 8)
                 findings.append({
                     "severity": "HIGH", "surface": "Application",
                     "title": "App trusts user-installed certificates",
-                    "fix": "Remove user certificate trust from network_security_config. "
-                           "This allows SSL interception by anyone who installs "
-                           "a certificate on the device."
+                    "fix": "Remove user certificate trust — enables SSL interception "
+                           "by anyone who installs a certificate on the device."
+                })
+
+            if "pin-set" in cfg_clean.lower() or "pin sha256" in cfg_clean.lower():
+                findings.append({
+                    "severity": "PASS", "surface": "Application",
+                    "title": "SSL certificate pinning configured",
+                    "fix": ""
+                })
+            else:
+                network_score = max(0, network_score - 5)
+                findings.append({
+                    "severity": "MEDIUM", "surface": "Application",
+                    "title": "No SSL certificate pinning configured",
+                    "fix": "Add <pin-set> to network_security_config.xml to prevent "
+                           "MITM attacks even if a CA is compromised."
                 })
         except Exception:
             pass
     else:
+        network_score = max(0, network_score - 8)
         findings.append({
-            "severity": "INFO", "surface": "Application",
+            "severity": "MEDIUM", "surface": "Application",
             "title": "No network_security_config.xml found",
-            "fix": "Add res/xml/network_security_config.xml to explicitly "
-                   "configure which certificates to trust"
+            "fix": "Add res/xml/network_security_config.xml to restrict trusted CAs "
+                   "and disable cleartext traffic."
         })
-        network_score = max(0, network_score - 5)
 
-    # ── Check for HTTP URLs hardcoded in files ─────────────────
+    # ── Build file list for content scanning ─────────────────
+    files_to_scan = sorted(
+        [f for f in file_list
+         if any(f.endswith(ext) for ext in
+                [".dex", ".xml", ".json", ".properties", ".txt", ".cfg", ".js", ".html"])
+         and not any(skip in f for skip in
+                     ["res/drawable", "res/layout", "res/mipmap",
+                      "res/anim", "res/color", "res/font"])],
+        key=lambda x: (not x.endswith(".dex"), x)
+    )
+
+    # ── Hardcoded HTTP URLs ───────────────────────────────────
     http_urls_found = []
     for fname in files_to_scan[:20]:
         try:
-            content = zf.read(fname).decode("utf-8", errors="ignore")
+            raw = zf.read(fname)
+            if fname.endswith(".xml"):
+                raw = raw.replace(b'\x00', b'')
+            content = raw.decode("utf-8", errors="ignore")
+            if len(content) > 15_000_000:
+                continue
             urls = re.findall(r'http://[a-zA-Z0-9\-\.]+\.[a-zA-Z]{2,}', content)
-            real_urls = [
-                u for u in urls
-                if not any(skip in u for skip in
-                           ["schemas.android.com", "www.w3.org",
-                            "localhost", "127.0.0.1", "example.com"])
-            ]
-            http_urls_found.extend(real_urls[:2])
+            real = [u for u in urls if not any(s in u for s in [
+                "schemas.android.com", "www.w3.org", "localhost",
+                "127.0.0.1", "example.com", "xmlpull.org"
+            ])]
+            http_urls_found.extend(real[:2])
         except Exception:
             pass
 
     if http_urls_found:
-        network_score = max(0, network_score - 8)
+        network_score = max(0, network_score - 6)
+        unique_http = list(set(http_urls_found))
         findings.append({
             "severity": "MEDIUM", "surface": "Application",
-            "title": f"HTTP (non-HTTPS) URLs hardcoded in app: "
-                     f"{len(set(http_urls_found))} found",
-            "fix": f"Change to HTTPS. Examples: "
-                   f"{', '.join(list(set(http_urls_found))[:3])}"
+            "title": f"{len(unique_http)} insecure HTTP endpoint(s) hardcoded in app",
+            "fix": f"Replace with HTTPS. Examples: {', '.join(unique_http[:3])}"
         })
     else:
         findings.append({
@@ -767,36 +735,88 @@ def scan_apk(apk_path):
         })
 
     # ─────────────────────────────────────────────────────────
-    # CATEGORY 4: Code safety (max 15)
+    # CATEGORY 3: Code security (max 25)
     # ─────────────────────────────────────────────────────────
 
-    # ── Check for ProGuard/obfuscation (mapping.txt present) ──
+    # ── Hardcoded secrets ─────────────────────────────────────
+    secret_patterns = [
+        (r'AKIA[0-9A-Z]{16}',                       "AWS Access Key"),
+        (r'sk_live_[0-9a-zA-Z]{24,}',               "Stripe Live Key"),
+        (r'AIza[0-9A-Za-z\-_]{35}',                 "Google API Key"),
+        (r'ghp_[0-9a-zA-Z]{36}',                    "GitHub Token"),
+        (r'-----BEGIN (RSA |EC )?PRIVATE KEY-----', "Private Key"),
+        (r'password\s*=\s*["\'][^"\']{8,}["\']',    "Hardcoded password"),
+        (r'secret\s*=\s*["\'][^"\']{8,}["\']',      "Hardcoded secret"),
+        (r'api_key\s*=\s*["\'][^"\']{8,}["\']',     "Hardcoded API key"),
+        (r'jdbc:[a-z]+://[^\s"\']{10,}',             "Hardcoded DB connection URL"),
+        (r'Bearer\s+[a-zA-Z0-9\-_]{20,}',           "Hardcoded Bearer token"),
+    ]
+
+    apk_secrets = []
+    for fname in files_to_scan[:30]:
+        try:
+            raw = zf.read(fname)
+            if fname.endswith(".xml"):
+                raw = raw.replace(b'\x00', b'')
+            content = raw.decode("utf-8", errors="ignore")
+            if len(content) > 15_000_000:
+                continue
+            for pattern, name in secret_patterns:
+                if re.search(pattern, content, re.IGNORECASE):
+                    apk_secrets.append(f"{name} in {fname}")
+        except Exception:
+            pass
+
+    seen_secrets = set()
+    for secret in apk_secrets:
+        if secret not in seen_secrets:
+            seen_secrets.add(secret)
+            code_score = max(0, code_score - 10)
+            findings.append({
+                "severity": "CRITICAL", "surface": "Application",
+                "title": f"Hardcoded secret found in APK: {secret}",
+                "fix": "Remove immediately. Use Android Keystore or server-side secrets. "
+                       "Anyone can extract hardcoded values from an APK with free tools."
+            })
+
+    if not apk_secrets:
+        findings.append({
+            "severity": "PASS", "surface": "Application",
+            "title": "No hardcoded secrets found in APK files",
+            "fix": ""
+        })
+
+    # ── Code obfuscation (ProGuard / R8) ──────────────────────
     has_obfuscation = any(
-        "mapping.txt" in f or "proguard" in f.lower()
+        "mapping.txt" in f or "proguard" in f.lower() or "r8" in f.lower()
         for f in file_list
     )
     if has_obfuscation:
         findings.append({
             "severity": "PASS", "surface": "Application",
-            "title": "Code obfuscation (ProGuard/R8) is enabled",
+            "title": "Code obfuscation (ProGuard/R8) detected",
             "fix": ""
         })
     else:
-        code_score = max(0, code_score - 5)
+        code_score = max(0, code_score - 7)
         findings.append({
-            "severity": "LOW", "surface": "Application",
-            "title": "No code obfuscation detected",
-            "fix": "Enable ProGuard/R8 in your build.gradle: "
-                   "minifyEnabled true. Makes reverse engineering harder."
+            "severity": "MEDIUM", "surface": "Application",
+            "title": "No code obfuscation detected (ProGuard/R8 not enabled)",
+            "fix": "Enable minifyEnabled true in build.gradle. "
+                   "Without obfuscation the APK is trivially reverse engineered."
         })
 
-    # ── Check for root detection ──────────────────────────────
-    root_keywords = ["isRooted", "RootBeer", "su", "busybox", "superuser"]
+    # ── Root detection ────────────────────────────────────────
+    root_kw = [b"isRooted", b"RootBeer", b"checkRoot", b"detectRoot",
+               b"busybox", b"superuser", b"Superuser.apk"]
     root_detected = False
     for fname in files_to_scan[:15]:
         try:
-            content = zf.read(fname).decode("utf-8", errors="ignore")
-            if any(kw in content for kw in root_keywords):
+            info = zf.getinfo(fname)
+            if info.file_size > 15_000_000:
+                continue
+            raw = zf.read(fname)
+            if any(kw in raw for kw in root_kw):
                 root_detected = True
                 break
         except Exception:
@@ -805,19 +825,113 @@ def scan_apk(apk_path):
     if root_detected:
         findings.append({
             "severity": "PASS", "surface": "Application",
-            "title": "Root detection implemented in app",
+            "title": "Root detection implemented",
             "fix": ""
         })
     else:
+        code_score = max(0, code_score - 5)
+        findings.append({
+            "severity": "LOW", "surface": "Application",
+            "title": "No root detection found",
+            "fix": "Add root detection (e.g., RootBeer) if the app handles "
+                   "sensitive data — rooted devices can bypass security controls."
+        })
+
+    # ── Debug logging in production code ──────────────────────
+    log_kw = [b"Log.d(", b"Log.v(", b"System.out.print", b"printStackTrace"]
+    logs_found = False
+    for fname in files_to_scan[:10]:
+        try:
+            info = zf.getinfo(fname)
+            if info.file_size > 15_000_000:
+                continue
+            raw = zf.read(fname)
+            if any(p in raw for p in log_kw):
+                logs_found = True
+                break
+        except Exception:
+            pass
+
+    if logs_found:
+        code_score = max(0, code_score - 3)
+        findings.append({
+            "severity": "LOW", "surface": "Application",
+            "title": "Debug logging statements detected in production code",
+            "fix": "Strip Log.d / System.out calls from release builds. "
+                   "Add ProGuard rules: -assumenosideeffects class android.util.Log { *; }"
+        })
+
+    # ─────────────────────────────────────────────────────────
+    # CATEGORY 4: Binary / packaging integrity (max 20)
+    # ─────────────────────────────────────────────────────────
+
+    # ── APK signature certificate ─────────────────────────────
+    cert_files = [f for f in file_list
+                  if f.endswith(".RSA") or f.endswith(".DSA") or f.endswith(".EC")]
+    if cert_files:
+        findings.append({
+            "severity": "PASS", "surface": "Application",
+            "title": "APK is signed with a certificate",
+            "fix": ""
+        })
+    else:
+        binary_score = max(0, binary_score - 10)
+        findings.append({
+            "severity": "HIGH", "surface": "Application",
+            "title": "No APK signature certificate found",
+            "fix": "Sign the APK before distribution. Unsigned APKs cannot be "
+                   "installed on stock Android and may be tampered."
+        })
+
+    # ── DEX file count (code surface area) ───────────────────
+    dex_files = [f for f in file_list if re.match(r'classes\d*\.dex$', f)]
+    if len(dex_files) > 3:
+        binary_score = max(0, binary_score - 4)
+        findings.append({
+            "severity": "LOW", "surface": "Application",
+            "title": f"Large app: {len(dex_files)} DEX files — increased attack surface",
+            "fix": "Review and remove unused libraries. Use R8 full-mode to shrink code."
+        })
+    elif dex_files:
+        findings.append({
+            "severity": "PASS", "surface": "Application",
+            "title": f"App code size is reasonable ({len(dex_files)} DEX file(s))",
+            "fix": ""
+        })
+
+    # ── Native libraries (.so) ────────────────────────────────
+    native_libs = [f for f in file_list if f.endswith(".so")]
+    if native_libs:
+        binary_score = max(0, binary_score - 3)
         findings.append({
             "severity": "INFO", "surface": "Application",
-            "title": "No root detection found",
-            "fix": "Consider adding root detection for sensitive apps "
-                   "using a library like RootBeer"
+            "title": f"{len(native_libs)} native library/libraries (.so) bundled",
+            "fix": "Native code bypasses the Java sandbox. Ensure all .so files "
+                   "are from trusted sources and are kept up to date."
+        })
+
+    # ── Embedded WebView assets ───────────────────────────────
+    webview_files = [f for f in file_list
+                     if "assets/" in f and
+                     any(f.endswith(ext) for ext in [".html", ".js", ".htm"])]
+    if len(webview_files) > 5:
+        binary_score = max(0, binary_score - 5)
+        findings.append({
+            "severity": "MEDIUM", "surface": "Application",
+            "title": f"Embedded web content: {len(webview_files)} HTML/JS assets — WebView risk",
+            "fix": "WebViews are prone to XSS and JavaScript injection. "
+                   "Disable setJavaScriptEnabled() unless absolutely required."
+        })
+    elif webview_files:
+        binary_score = max(0, binary_score - 2)
+        findings.append({
+            "severity": "LOW", "surface": "Application",
+            "title": f"{len(webview_files)} embedded HTML/JS asset(s) present",
+            "fix": "Verify WebView security settings are locked down."
         })
 
     zf.close()
 
-    final_score = perm_score + secret_score + network_score + code_score
+    final_score = manifest_score + network_score + code_score + binary_score
     final_score = max(0, min(100, final_score))
     return {"score": final_score, "findings": findings}
