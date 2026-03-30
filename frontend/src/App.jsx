@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { runScan } from './api';
 import { generatePDFReport } from './generateReport';
+import SupportPage from './SupportPage';
 import AuthPage from './AuthPage';
+import QuestionnairePage from './QuestionnairePage';
 
 
 // ── colour tokens ──────────────────────────────────────────────
@@ -339,7 +341,7 @@ function ThreatGauge({ pct = 74 }) {
 }
 
 // ── AI Chat Panel ──────────────────────────────────────────────
-function AIAssistant({ results }) {
+function AIAssistant({ results, userPreferences }) {
   const [messages, setMessages] = useState([
     { from: 'bot', text: results
         ? `Good morning, Sentinel. I've analyzed your recent scan. The score is ${results.final.score}/100 with grade ${results.final.grade}. ${results.final.message}.`
@@ -361,21 +363,25 @@ function AIAssistant({ results }) {
     setMessages(updatedMessages);
     setIsLoading(true);
     try {
+      const chatBody = {
+        messages: updatedMessages.map(m => ({
+          role: m.from === 'bot' ? 'assistant' : 'user',
+          content: m.text,
+        })),
+        scan_context: results ? {
+          score: results.final.score,
+          grade: results.final.grade,
+          issues: results.findings.filter(f => f.severity !== 'PASS').map(f => f.title),
+          passes: results.findings.filter(f => f.severity === 'PASS').map(f => f.title),
+        } : null,
+      };
+      if (userPreferences) {
+        chatBody.user_preferences = userPreferences;
+      }
       const res = await fetch('http://localhost:8000/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: updatedMessages.map(m => ({
-            role: m.from === 'bot' ? 'assistant' : 'user',
-            content: m.text,
-          })),
-          scan_context: results ? {
-            score: results.final.score,
-            grade: results.final.grade,
-            issues: results.findings.filter(f => f.severity !== 'PASS').map(f => f.title),
-            passes: results.findings.filter(f => f.severity === 'PASS').map(f => f.title),
-          } : null,
-        }),
+        body: JSON.stringify(chatBody),
       });
       const data = await res.json();
       setMessages(m => [...m, { from: 'bot', text: data.response }]);
@@ -486,7 +492,7 @@ function AIAssistant({ results }) {
 }
 
 // ── Dashboard Page ─────────────────────────────────────────────
-function DashboardPage({ results, setPage }) {
+function DashboardPage({ results, setPage, userPreferences }) {
   const recentScans = results ? [
     { name: results.scores.website !== null ? 'Website Scan' : null, status: results.final.grade === 'A' ? 'PASSED' : results.final.grade === 'F' ? 'FAILED' : 'WARNING', critical: results.findings.filter(f=>f.severity==='CRITICAL' && f.surface==='Website').length, warning: results.findings.filter(f=>f.severity==='MEDIUM' && f.surface==='Website').length, ago: 'Just now' },
     { name: results.scores.app !== null ? 'App Scan' : null, status: (results.scores.app||0) >= 70 ? 'PASSED' : (results.scores.app||0) >= 40 ? 'WARNING' : 'FAILED', critical: results.findings.filter(f=>f.severity==='CRITICAL'&&f.surface==='Application').length, warning: results.findings.filter(f=>f.severity==='MEDIUM'&&f.surface==='Application').length, ago: 'Just now' },
@@ -594,7 +600,7 @@ function DashboardPage({ results, setPage }) {
       </div>
 
       <div style={{ flexShrink:0 }}>
-        <AIAssistant results={results} />
+        <AIAssistant results={results} userPreferences={userPreferences} />
       </div>
     </div>
   );
@@ -605,6 +611,12 @@ function ScanInputPage({ onScan, loading, error }) {
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [appUrl, setAppUrl] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
+  const [scannerType, setScannerType] = useState('python');
+
+  const scannerOptions = [
+    { id: 'python', label: 'Python Scanner', icon: '🐍', desc: 'Fast, lightweight custom checks' },
+    { id: 'zap', label: 'OWASP ZAP', icon: '🔬', desc: 'Deep scan via ZAP API' },
+  ];
 
   return (
     <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding: 40, gap:32 }}>
@@ -631,12 +643,66 @@ function ScanInputPage({ onScan, loading, error }) {
             </div>
           );
         })}
+        {/* ── Scanner Type Selector ─────────────────────────── */}
+        <div style={{ marginBottom: 24 }}>
+          <label style={{ display:'block', color:C.textSecondary, fontSize:12, marginBottom:10, fontWeight:600, letterSpacing:'0.04em', textTransform:'uppercase' }}>Website Scanner Engine</label>
+          <div style={{ display:'flex', gap:10 }}>
+            {scannerOptions.map(opt => {
+              const active = scannerType === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setScannerType(opt.id)}
+                  style={{
+                    flex:1, padding:'14px 12px', borderRadius:10,
+                    background: active
+                      ? `linear-gradient(135deg, rgba(108,92,231,0.15), rgba(232,67,147,0.06))`
+                      : 'rgba(255,255,255,0.03)',
+                    border: `1.5px solid ${active ? C.accent : C.border}`,
+                    cursor:'pointer', transition:'all 0.2s',
+                    display:'flex', flexDirection:'column', alignItems:'center', gap:6,
+                    position:'relative',
+                  }}
+                >
+                  {active && (
+                    <div style={{
+                      position:'absolute', top:6, right:6,
+                      width:16, height:16, borderRadius:'50%',
+                      background:C.accent,
+                      display:'flex', alignItems:'center', justifyContent:'center',
+                    }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </div>
+                  )}
+                  <span style={{ fontSize:22 }}>{opt.icon}</span>
+                  <span style={{ color: active ? C.accent : C.textPrimary, fontSize:13, fontWeight:600 }}>{opt.label}</span>
+                  <span style={{ color: C.textSecondary, fontSize:10 }}>{opt.desc}</span>
+                </button>
+              );
+            })}
+          </div>
+          {scannerType === 'zap' && (
+            <div style={{
+              marginTop:8, padding:'6px 10px', borderRadius:6,
+              background:'rgba(108,92,231,0.08)', border:`1px solid rgba(108,92,231,0.15)`,
+              color:C.textSecondary, fontSize:11,
+              display:'flex', alignItems:'center', gap:6,
+            }}>
+              <span style={{ color:C.accent }}>ℹ</span>
+              Requires OWASP ZAP daemon running on localhost:8080
+            </div>
+          )}
+        </div>
+
         {error && (
           <div style={{ marginBottom:16, padding:'10px 14px', borderRadius:8, background:'rgba(255,71,87,0.1)', border:'1px solid rgba(255,71,87,0.25)', color:'#ff4757', fontSize:13 }}>
             {error}
           </div>
         )}
-        <button onClick={() => onScan(websiteUrl, appUrl, repoUrl)} disabled={loading} style={{
+        <button onClick={() => onScan(websiteUrl, appUrl, repoUrl, scannerType)} disabled={loading} style={{
           width:'100%', padding:'13px', borderRadius:8,
           background: loading ? C.textMuted : `linear-gradient(135deg, ${C.accent}, #8b7cf8)`,
           border:'none', color:'#fff', fontSize:15, fontWeight:600,
@@ -646,9 +712,13 @@ function ScanInputPage({ onScan, loading, error }) {
           {loading ? (
             <span style={{ ...flex('row','center','center',8) }}>
               <span style={{ animation:'spin 1s linear infinite', display:'inline-block' }}>⟳</span>
-              Scanning... (~30 seconds)
+              {scannerType === 'zap' ? 'ZAP Scanning... (~2 minutes)' : 'Scanning... (~30 seconds)'}
             </span>
-          ) : 'Run Security Scan'}
+          ) : (
+            <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
+              {scannerType === 'zap' ? '🔬' : '🐍'} Run Security Scan
+            </span>
+          )}
         </button>
       </div>
     </div>
@@ -888,7 +958,6 @@ function ThreatTerminalPage() {
       </div>
 
       <div style={{ background:termBg, borderRadius:12, border:`1px solid ${termBorder}`, overflow:'hidden' }}>
-        {/* Title bar */}
         <div style={{ background:'#11151e', borderBottom:`1px solid ${termBorder}`, padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <div style={{ display:'flex', gap:6 }}>
@@ -902,7 +971,6 @@ function ThreatTerminalPage() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div style={{ display:'flex', borderBottom:`1px solid ${termBorder}`, background:termBg }}>
           {[['feed','EVENT FEED'],['geo','IP INTEL'],['vectors','ATTACK VECTORS']].map(([id,label]) => (
             <button key={id} onClick={() => setTab(id)} style={{
@@ -914,7 +982,6 @@ function ThreatTerminalPage() {
           ))}
         </div>
 
-        {/* Feed */}
         {tab === 'feed' && (
           <div style={{ height:340, overflowY:'auto', padding:'8px 0' }}>
             {events.length === 0 ? (
@@ -937,7 +1004,6 @@ function ThreatTerminalPage() {
           </div>
         )}
 
-        {/* IP Intel */}
         {tab === 'geo' && (
           <div style={{ padding:16, height:340, overflowY:'auto' }}>
             <div style={{ color:termMuted, fontSize:10, fontFamily:mono, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>
@@ -957,7 +1023,6 @@ function ThreatTerminalPage() {
           </div>
         )}
 
-        {/* Attack Vectors */}
         {tab === 'vectors' && (
           <div style={{ padding:16, height:340, overflowY:'auto' }}>
             <div style={{ color:termMuted, fontSize:10, fontFamily:mono, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>
@@ -977,7 +1042,6 @@ function ThreatTerminalPage() {
           </div>
         )}
 
-        {/* Stats bar */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:1, background:termBorder, borderTop:`1px solid ${termBorder}` }}>
           {[
             { val:stats.total,     label:'Events',     color:'#a29bfe' },
@@ -1006,110 +1070,6 @@ function ThreatTerminalPage() {
         @keyframes fadeInRow { from { opacity:0; background:rgba(108,92,231,0.08); } to { opacity:1; background:transparent; } }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
       `}</style>
-    </div>
-  );
-}
-
-// ── Support Page ───────────────────────────────────────────────
-function SupportPage() {
-  const domains = [
-    { icon:'🛡️', color:C.pink,   title:'Account Security',  desc:'Master multi-factor authentication, biometric locks, and session management protocols.', links:['Resetting administrative credentials','Configuring hardware security keys'] },
-    { icon:'⊙',  color:C.accent, title:'Scan Config',        desc:'Fine-tune your perimeter scan frequency and threat detection depth.', links:[] },
-    { icon:'◈',  color:C.cyan,   title:'API Docs',           desc:"Integrate Sentinel's intelligence into your existing infrastructure.", links:[] },
-    { icon:'🪙', color:C.amber,  title:'Billing & Plans',    desc:'Review enterprise tier features and resource allocation.', links:[] },
-    { icon:'⚠️', color:C.red,    title:'Incident Response',  desc:'What to do when a Level 5 breach is detected in your network subnet.', links:['View Protocols →'] },
-  ];
-
-  return (
-    <div style={{ flex:1, overflowY:'auto', padding:32 }}>
-      <div style={{ textAlign:'center', marginBottom:40 }}>
-        <h1 style={{ margin:'0 0 8px', color:C.textPrimary, fontSize:28, fontWeight:700 }}>How can we help you, Sentinel?</h1>
-        <p style={{ margin:'0 0 24px', color:C.textSecondary, fontSize:14 }}>Access the central intelligence repository for all Security Operations.</p>
-        <div style={{ maxWidth:520, margin:'0 auto', ...flex('row','center','flex-start',0), background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:10 }}>
-          <span style={{ padding:'0 14px', color:C.textMuted }}><Icon.Search /></span>
-          <input placeholder="Search for documentation, troubleshooting, or API keys..."
-            style={{ flex:1, background:'transparent', border:'none', outline:'none', color:C.textSecondary, fontSize:13, padding:'12px 0' }}
-          />
-          <button style={{ margin:6, padding:'6px 16px', borderRadius:8, background:C.accent, border:'none', color:'#fff', fontSize:12, fontWeight:600, cursor:'pointer' }}>Analyze</button>
-        </div>
-      </div>
-
-      <div style={{ marginBottom:40 }}>
-        <div style={{ ...flex('row','center','flex-start',8), marginBottom:20 }}>
-          <div style={{ width:3, height:18, background:C.pink, borderRadius:2 }}/>
-          <h2 style={{ margin:0, color:C.textPrimary, fontSize:16, fontWeight:600 }}>Knowledge Domains</h2>
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))', gap:14 }}>
-          {domains.map((d,i) => (
-            <div key={i} style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderTop:`3px solid ${d.color}`, borderRadius:12, padding:20, cursor:'pointer' }}>
-              <div style={{ fontSize:20, marginBottom:10 }}>{d.icon}</div>
-              <div style={{ color:C.textPrimary, fontSize:14, fontWeight:600, marginBottom:6 }}>{d.title}</div>
-              <div style={{ color:C.textSecondary, fontSize:12, lineHeight:1.5, marginBottom:10 }}>{d.desc}</div>
-              {d.links.map((l,j) => (
-                <div key={j} style={{ ...flex('row','center','flex-start',4), color:d.color, fontSize:12, cursor:'pointer' }}>
-                  <Icon.ChevronRight /> {l}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ ...flex('row','flex-start','flex-start',20) }}>
-        <div style={{ flex:1 }}>
-          <div style={{ ...flex('row','center','flex-start',8), marginBottom:16 }}>
-            <div style={{ width:3, height:18, background:C.accent, borderRadius:2 }}/>
-            <h2 style={{ margin:0, color:C.textPrimary, fontSize:16, fontWeight:600 }}>Support Channels</h2>
-          </div>
-          <div style={{ ...flex('row','stretch','flex-start',12), marginBottom:20 }}>
-            {[{icon:'🎫',title:'Open a Ticket',desc:'Response time: < 2 hours'},{icon:'💬',title:'Live Chat',desc:'Direct encrypted link'},{icon:'👥',title:'Community',desc:'Sentinel Global Forum'}].map(({icon,title,desc},i) => (
-              <div key={i} style={{ flex:1, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:10, padding:16, cursor:'pointer' }}>
-                <div style={{ fontSize:18, marginBottom:8 }}>{icon}</div>
-                <div style={{ color:C.textPrimary, fontSize:13, fontWeight:500 }}>{title}</div>
-                <div style={{ color:C.textSecondary, fontSize:11, marginTop:4 }}>{desc}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:10, padding:20, ...flex('row','center','space-between',16) }}>
-            <div>
-              <div style={{ color:C.textPrimary, fontSize:15, fontWeight:600, marginBottom:4 }}>Still need tactical assistance?</div>
-              <div style={{ color:C.textSecondary, fontSize:12 }}>Our high-level security engineers are standing by for live deployment support.</div>
-            </div>
-            <button style={{ padding:'10px 20px', borderRadius:8, flexShrink:0, background:'transparent', border:`1px solid ${C.border}`, color:C.textPrimary, fontSize:13, fontWeight:500, cursor:'pointer' }}>Connect with Command</button>
-          </div>
-        </div>
-
-        <div style={{ width:260, flexShrink:0 }}>
-          <div style={{ ...flex('row','center','flex-start',8), marginBottom:16 }}>
-            <div style={{ width:3, height:18, background:C.accent, borderRadius:2 }}/>
-            <h2 style={{ margin:0, color:C.textPrimary, fontSize:16, fontWeight:600 }}>System Status</h2>
-          </div>
-          <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:10, padding:16 }}>
-            <div style={{ ...flex('row','center','space-between',0), padding:'8px 12px', borderRadius:8, background:C.bg, marginBottom:16 }}>
-              <div style={{ ...flex('row','center','flex-start',8) }}>
-                <span style={{ width:8,height:8,borderRadius:'50%',background:C.green,display:'inline-block' }}/>
-                <span style={{ color:C.textPrimary, fontSize:13 }}>Global Nodes</span>
-              </div>
-              <span style={{ padding:'2px 8px', borderRadius:4, background:'rgba(0,184,148,0.15)', color:C.green, fontSize:10, fontWeight:700 }}>OPERATIONAL</span>
-            </div>
-            <div style={{ color:C.textMuted, fontSize:10, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Recent Updates</div>
-            {[
-              {title:'Vulnerability Database v4.2',time:'2h ago',desc:'New signatures for quantum-resistant encryption bypass attempts have been added.'},
-              {title:'Scheduled Maintenance',time:'1d ago',desc:'APAC Regional Nodes underwent telemetry optimization successfully.'},
-              {title:'Sentinel Core Patch 8.0',time:'3d ago',desc:'Major upgrade to the neural processing engine for predictive threat detection.'},
-            ].map(({title,time,desc},i) => (
-              <div key={i} style={{ marginBottom:12, paddingBottom:12, borderBottom: i<2 ? `1px solid ${C.border}` : 'none' }}>
-                <div style={{ ...flex('row','center','space-between',0), marginBottom:3 }}>
-                  <span style={{ color:C.textPrimary, fontSize:12, fontWeight:500 }}>{title}</span>
-                  <span style={{ color:C.textMuted, fontSize:10 }}>{time}</span>
-                </div>
-                <div style={{ color:C.textSecondary, fontSize:11, lineHeight:1.4 }}>{desc}</div>
-              </div>
-            ))}
-            <button style={{ width:'100%', padding:'8px 0', borderRadius:8, marginTop:4, background:'transparent', border:`1px solid ${C.border}`, color:C.textSecondary, fontSize:11, fontWeight:600, cursor:'pointer', letterSpacing:'0.04em' }}>FULL STATUS HISTORY</button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1172,22 +1132,45 @@ function LogsPage({ results }) {
 // ── Root App ───────────────────────────────────────────────────
 export default function App() {
   const [user, setUser] = useState(null);
+  const [userPreferences, setUserPreferences] = useState(null);
   const [page, setPage] = useState('dashboard');
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Restore preferences from sessionStorage on mount
+  useEffect(() => {
+    const saved = sessionStorage.getItem('securepulse_prefs');
+    if (saved) {
+      try { setUserPreferences(JSON.parse(saved)); } catch {}
+    }
+  }, []);
+
+  // Step 1: Auth gate
   if (!user) {
-      return <AuthPage onAuth={(u) => setUser(u)} />;
+    return <AuthPage onAuth={(u) => setUser(u)} />;
   }
 
-  async function handleScan(websiteUrl, appUrl, repoUrl) {
+  // Step 2: Questionnaire gate (after login, before dashboard)
+  if (!userPreferences) {
+    return (
+      <QuestionnairePage
+        userName={user.name || user.email}
+        onComplete={(prefs) => {
+          setUserPreferences(prefs);
+          sessionStorage.setItem('securepulse_prefs', JSON.stringify(prefs));
+        }}
+      />
+    );
+  }
+
+  async function handleScan(websiteUrl, appUrl, repoUrl, scannerType = 'python') {
     if (websiteUrl === null) { setResults(null); return; }
     if (!websiteUrl && !appUrl && !repoUrl) { setError('Please enter at least one URL to scan.'); return; }
     setError('');
     setLoading(true);
     try {
-      const data = await runScan(websiteUrl, appUrl, repoUrl);
+      const data = await runScan(websiteUrl, appUrl, repoUrl, scannerType, userPreferences);
       data._target = websiteUrl || appUrl;
       setResults(data);
       setPage('scans');
@@ -1199,13 +1182,13 @@ export default function App() {
 
   const renderPage = () => {
     switch(page) {
-      case 'dashboard': return <DashboardPage results={results} setPage={setPage} />;
+      case 'dashboard': return <DashboardPage results={results} setPage={setPage} userPreferences={userPreferences} />;
       case 'scans':     return <ScansPage results={results} onNewScan={handleScan} loading={loading} error={error} />;
       case 'logs':      return <LogsPage results={results} />;
       case 'terminal':  return <ThreatTerminalPage />;
-      case 'support':   return <SupportPage />;
+      case 'support':   return <SupportPage />;   // ← uses the imported SupportPage
       case 'settings':  return <SettingsPage />;
-      default:          return <DashboardPage results={results} setPage={setPage} />;
+      default:          return <DashboardPage results={results} setPage={setPage} userPreferences={userPreferences} />;
     }
   };
 

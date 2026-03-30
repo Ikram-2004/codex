@@ -20,7 +20,7 @@ Never make up CVE IDs or vulnerability data — only discuss what's shared or we
 If asked about patching, give concrete commands or config snippets when possible."""
 
 
-async def get_chat_response(messages: list, scan_context: dict = None) -> str:
+async def get_chat_response(messages: list, scan_context: dict = None, prefs_context: dict = None) -> str:
     if not GROQ_API_KEY:
         return "PulseAssistant requires a GROQ_API_KEY in your .env file. Please add it and restart the backend."
 
@@ -35,6 +35,32 @@ async def get_chat_response(messages: list, scan_context: dict = None) -> str:
             system += f"Active issues: {'; '.join(issues[:5])}. "
         if passes:
             system += f"Passing checks: {'; '.join(passes[:3])}."
+
+    # Personalization from user questionnaire
+    if prefs_context:
+        system += "\n\nUser profile:"
+        if prefs_context.get("project_type"):
+            system += f" Working on a {prefs_context['project_type']} project."
+        if prefs_context.get("security_concern"):
+            system += f" Primary concern: {prefs_context['security_concern']}."
+        if prefs_context.get("experience_level"):
+            level = prefs_context["experience_level"]
+            if level in ("Beginner", "beginner"):
+                system += " User is a beginner — use simple, jargon-free language with analogies."
+            elif level in ("Intermediate", "intermediate"):
+                system += " User has intermediate security knowledge."
+            else:
+                system += f" User is {level}-level — use precise technical language."
+        if prefs_context.get("detail_level"):
+            dl = prefs_context["detail_level"]
+            if "Simple" in dl or "simple" in dl:
+                system += " Prefer simple, concise explanations."
+            elif "Executive" in dl or "executive" in dl:
+                system += " Prefer executive-summary style — high-level impact and business risk."
+            else:
+                system += " Prefer detailed technical explanations with code snippets."
+        if prefs_context.get("deployment_env"):
+            system += f" Deployment: {prefs_context['deployment_env']}."
 
     api_messages = []
     for m in messages:
