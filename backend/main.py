@@ -1,8 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
+from sqlalchemy.orm import Session
+
 from website_scanner import scan_website
 from zap_scanner import scan_website_zap
 from app_scanner import scan_app
@@ -14,6 +16,9 @@ from support import (
     search_knowledge_base,
     get_live_chat_response
 )
+from database import get_db, init_db
+import crud
+
 import asyncio
 import json
 import time
@@ -27,6 +32,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Initialize database on startup ────────────────────────────
+@app.on_event("startup")
+def on_startup():
+    init_db()
 
 # ── Global SSE event queue ─────────────────────────────────────
 event_queue: asyncio.Queue = asyncio.Queue(maxsize=500)
@@ -46,6 +56,7 @@ class ScanRequest(BaseModel):
     repo_url: str = ""
     scanner_type: str = "python"   # "python" | "zap"
     user_preferences: Optional[UserPreferences] = None
+    user_id: Optional[str] = None  # link scan to a logged-in user
 
 class ChatMessage(BaseModel):
     role: str
@@ -55,6 +66,8 @@ class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     scan_context: Optional[dict] = None
     user_preferences: Optional[UserPreferences] = None
+    user_id: Optional[str] = None
+    session_id: Optional[str] = None
 
 class TicketRequest(BaseModel):
     name: str
@@ -63,12 +76,14 @@ class TicketRequest(BaseModel):
     priority: str = "medium"
     description: str
     scan_id: Optional[str] = None
+    user_id: Optional[str] = None
 
 class SearchRequest(BaseModel):
     query: str
 
 class LiveChatRequest(BaseModel):
     messages: List[ChatMessage]
+    user_id: Optional[str] = None
 
 class CommandRequest(BaseModel):
     name: str
@@ -76,6 +91,22 @@ class CommandRequest(BaseModel):
     company: str = ""
     message: str
     urgency: str = "medium"
+
+# ── Auth models ────────────────────────────────────────────────
+
+class RegisterRequest(BaseModel):
+    email: str
+    name: str
+    password: str
+    company: str = ""
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class UpdatePreferencesRequest(BaseModel):
+    user_id: str
+    preferences: UserPreferences
 
 # ── Helpers ────────────────────────────────────────────────────
 
@@ -165,11 +196,95 @@ async def threat_logger(request, call_next):
     return response
 
 
-# ── Routes ─────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════
+#  AUTH ROUTES
+# ══════════════════════════════════════════════════════════════
+
+@app.post("/auth/register")
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    """Register a new user account."""
+    existing = crud.get_user_by_email(db, req.email)
+    if existing:
+        raise HTTPException(status_code=409, detail="Email already registered")
+
+    user = crud.create_user(db, req.email, req.name, req.password, req.company)
+    return {
+        "success": True,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "company": user.company,
+            "created_at": user.created_at.isoformat() if user.created_at else "",
+        },
+    }
+
+
+@app.post("/auth/login")
+def login(req: LoginRequest, db: Session = Depends(get_db)):
+    """Authenticate and return user data."""
+    user = crud.authenticate_user(db, req.email, req.password)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    return {
+        "success": True,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "company": user.company,
+            "preferences": {
+                "project_type": user.pref_project_type,
+                "security_concern": user.pref_security_concern,
+                "experience_level": user.pref_experience_level,
+                "detail_level": user.pref_detail_level,
+                "deployment_env": user.pref_deployment_env,
+            },
+        },
+    }
+
+
+@app.get("/auth/user/{user_id}")
+def get_user(user_id: str, db: Session = Depends(get_db)):
+    """Get user profile by ID."""
+    user = crud.get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "company": user.company,
+        "created_at": user.created_at.isoformat() if user.created_at else "",
+        "preferences": {
+            "project_type": user.pref_project_type,
+            "security_concern": user.pref_security_concern,
+            "experience_level": user.pref_experience_level,
+            "detail_level": user.pref_detail_level,
+            "deployment_env": user.pref_deployment_env,
+        },
+    }
+
+
+@app.put("/auth/preferences")
+def update_preferences(req: UpdatePreferencesRequest, db: Session = Depends(get_db)):
+    """Update user questionnaire preferences."""
+    user = crud.update_user_preferences(db, req.user_id, req.preferences.dict())
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"success": True, "message": "Preferences updated"}
+
+
+# ══════════════════════════════════════════════════════════════
+#  CORE ROUTES
+# ══════════════════════════════════════════════════════════════
 
 @app.get("/")
 def root():
-    return {"status": "SecurePulse API is running", "version": "2.0"}
+    return {"status": "SecurePulse API is running", "version": "3.0-db"}
 
 
 @app.get("/events")
@@ -194,7 +309,7 @@ async def sse_events():
 
 
 @app.post("/scan")
-def run_scan(request: ScanRequest):
+def run_scan(request: ScanRequest, db: Session = Depends(get_db)):
     all_findings = []
     website_score = None
     app_score = None
@@ -241,21 +356,77 @@ def run_scan(request: ScanRequest):
     severity_order = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "INFO": 3, "PASS": 4}
     all_findings.sort(key=lambda x: severity_order.get(x["severity"], 5))
 
+    # ── Save scan to database ──────────────────────────────
+    scores_dict = {"website": website_score, "app": app_score, "codebase": code_score}
+    scan_record = crud.save_scan(
+        db=db,
+        user_id=request.user_id,
+        website_url=request.website_url,
+        app_url=request.app_url,
+        repo_url=request.repo_url,
+        scanner_type=request.scanner_type,
+        final_result=final,
+        scores=scores_dict,
+        findings=all_findings,
+    )
+
     return {
+        "scan_id": scan_record.id,
         "final": final,
-        "scores": {
-            "website": website_score,
-            "app": app_score,
-            "codebase": code_score
-        },
-        "findings": all_findings
+        "scores": scores_dict,
+        "findings": all_findings,
     }
 
 
+# ── Scan History ───────────────────────────────────────────────
+
+@app.get("/scans/history/{user_id}")
+def scan_history(user_id: str, db: Session = Depends(get_db)):
+    """Get scan history for a user."""
+    history = crud.get_scan_history_summary(db, user_id)
+    return {"scans": history, "total": len(history)}
+
+
+@app.get("/scans/{scan_id}")
+def scan_details(scan_id: str, db: Session = Depends(get_db)):
+    """Get full details of a past scan."""
+    details = crud.get_scan_details(db, scan_id)
+    if not details:
+        raise HTTPException(status_code=404, detail="Scan not found")
+    return details
+
+
+# ── Dashboard Stats ────────────────────────────────────────────
+
+@app.get("/dashboard/{user_id}")
+def dashboard_stats(user_id: str, db: Session = Depends(get_db)):
+    """Get aggregated dashboard statistics for a user."""
+    stats = crud.get_dashboard_stats(db, user_id)
+    return stats
+
+
+# ══════════════════════════════════════════════════════════════
+#  CHAT ROUTES (now with DB persistence)
+# ══════════════════════════════════════════════════════════════
+
 @app.post("/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, db: Session = Depends(get_db)):
     try:
         messages = [{"role": m.role, "content": m.content} for m in request.messages]
+
+        # Save user message to DB
+        if request.user_id and messages:
+            last_msg = messages[-1]
+            crud.save_chat_message(
+                db=db,
+                role=last_msg["role"],
+                content=last_msg["content"],
+                user_id=request.user_id,
+                session_id=request.session_id,
+                chat_type="advisor",
+                scan_context=request.scan_context,
+            )
+
         # Build preferences context for personalization
         prefs_context = None
         if request.user_preferences:
@@ -267,7 +438,20 @@ async def chat(request: ChatRequest):
                 "detail_level": p.detail_level,
                 "deployment_env": p.deployment_env,
             }
+
         response_text = await get_chat_response(messages, request.scan_context, prefs_context)
+
+        # Save assistant response to DB
+        if request.user_id:
+            crud.save_chat_message(
+                db=db,
+                role="assistant",
+                content=response_text,
+                user_id=request.user_id,
+                session_id=request.session_id,
+                chat_type="advisor",
+            )
+
         return {"response": response_text, "success": True}
     except Exception as e:
         error_msg = str(e)
@@ -282,7 +466,16 @@ async def chat(request: ChatRequest):
         return {"response": msg, "success": False}
 
 
-# ── Support endpoints ──────────────────────────────────────────
+@app.get("/chat/history/{user_id}")
+def chat_history(user_id: str, chat_type: str = "advisor", db: Session = Depends(get_db)):
+    """Get chat history for a user."""
+    history = crud.get_chat_history(db, user_id, chat_type)
+    return {"messages": history}
+
+
+# ══════════════════════════════════════════════════════════════
+#  SUPPORT ROUTES (now with DB persistence)
+# ══════════════════════════════════════════════════════════════
 
 @app.get("/support/knowledge")
 async def get_knowledge_domains():
@@ -327,24 +520,76 @@ async def search_support(request: SearchRequest):
 
 
 @app.post("/ticket")
-async def create_ticket(request: TicketRequest):
-    """Create a support ticket."""
-    ticket_id = f"TKT-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+async def create_ticket_endpoint(request: TicketRequest, db: Session = Depends(get_db)):
+    """Create a support ticket — now persisted to DB."""
+    ticket = crud.create_ticket(
+        db=db,
+        name=request.name,
+        email=request.email,
+        subject=request.subject,
+        priority=request.priority,
+        description=request.description,
+        user_id=request.user_id,
+        scan_id=request.scan_id,
+    )
     return {
         "success": True,
-        "ticket_id": ticket_id,
-        "message": f"Ticket {ticket_id} created successfully. You'll receive a response at {request.email} within 2 hours.",
+        "ticket_id": ticket.ticket_number,
+        "message": f"Ticket {ticket.ticket_number} created successfully. You'll receive a response at {request.email} within 2 hours.",
         "priority": request.priority,
         "estimated_response": "< 2 hours" if request.priority in ["high", "critical"] else "< 24 hours"
     }
 
 
+@app.get("/tickets/{user_id}")
+def get_user_tickets(user_id: str, db: Session = Depends(get_db)):
+    """Get all tickets for a user."""
+    tickets = crud.get_tickets_by_user(db, user_id)
+    return {
+        "tickets": [
+            {
+                "id": t.id,
+                "ticket_number": t.ticket_number,
+                "subject": t.subject,
+                "priority": t.priority,
+                "status": t.status,
+                "created_at": t.created_at.isoformat() if t.created_at else "",
+                "description": t.description[:200],
+            }
+            for t in tickets
+        ]
+    }
+
+
 @app.post("/support/livechat")
-async def live_chat(request: LiveChatRequest):
-    """AI-powered live support chat."""
+async def live_chat(request: LiveChatRequest, db: Session = Depends(get_db)):
+    """AI-powered live support chat — now with DB persistence."""
     try:
         messages = [{"role": m.role, "content": m.content} for m in request.messages]
+
+        # Save user message
+        if request.user_id and messages:
+            last_msg = messages[-1]
+            crud.save_chat_message(
+                db=db,
+                role=last_msg["role"],
+                content=last_msg["content"],
+                user_id=request.user_id,
+                chat_type="support",
+            )
+
         response = await get_live_chat_response(messages)
+
+        # Save assistant response
+        if request.user_id:
+            crud.save_chat_message(
+                db=db,
+                role="assistant",
+                content=response,
+                user_id=request.user_id,
+                chat_type="support",
+            )
+
         return {"success": True, "response": response}
     except Exception as e:
         return {"success": False, "response": f"Chat error: {str(e)}"}

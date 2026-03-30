@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { registerUser, loginUser } from './api';
 
 // ── colour tokens (mirrored from App.jsx) ──────────────────────
 const C = {
@@ -259,10 +260,20 @@ export default function AuthPage({ onAuth }) {
     setErrors({});
     setLoading(true);
 
-    // Simulate auth — replace with real API call
-    await new Promise(r => setTimeout(r, 1200));
-    setLoading(false);
-    onAuth({ email, name: name || email.split('@')[0] });
+    try {
+      if (isLogin) {
+        const data = await loginUser(email, password);
+        onAuth(data.user);
+      } else {
+        const data = await registerUser(email, name, password);
+        onAuth(data.user);
+      }
+    } catch (err) {
+      const detail = err.response?.data?.detail || 'Something went wrong. Please try again.';
+      setErrors({ form: detail });
+    } finally {
+      setLoading(false);
+    }
   }
 
   const isLogin = mode === 'login';
@@ -433,6 +444,25 @@ export default function AuthPage({ onAuth }) {
                 }}>
                   Forgot password?
                 </button>
+              </div>
+            )}
+
+            {/* Form-level error (server errors) */}
+            {errors.form && (
+              <div style={{
+                background: 'rgba(214,48,49,0.1)',
+                border: `1px solid ${C.red}`,
+                borderRadius: 8,
+                padding: '10px 14px',
+                marginTop: 12,
+                marginBottom: 4,
+                color: C.red,
+                fontSize: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+              }}>
+                ⚠ {errors.form}
               </div>
             )}
 
