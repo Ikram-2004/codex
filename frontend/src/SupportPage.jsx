@@ -955,24 +955,8 @@ export default function SupportPage() {
             padding: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
             backgroundImage: `radial-gradient(ellipse at top right, rgba(232,67,147,0.06) 0%, transparent 60%)`,
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 12, background: C.pinkSoft, border: `1px solid rgba(232,67,147,0.3)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.pink, flexShrink: 0 }}>
-                <CommandIcon />
-              </div>
-              <div>
-                <div style={{ color: C.textPrimary, fontSize: 15, fontWeight: 700, marginBottom: 3 }}>Still need tactical assistance?</div>
-                <div style={{ color: C.textSecondary, fontSize: 12 }}>Our high-level security engineers are standing by for live deployment support and incident response.</div>
-              </div>
-            </div>
-            <button onClick={() => setModal('command')} style={{
-              padding: '10px 20px', borderRadius: 9, flexShrink: 0,
-              background: `linear-gradient(135deg, ${C.pink}, #c0392b)`,
-              border: 'none', color: '#fff', fontSize: 13, fontWeight: 700,
-              cursor: 'pointer', boxShadow: '0 4px 16px rgba(232,67,147,0.3)',
-              display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap',
-            }}>
-              <CommandIcon /> Connect with Command
-            </button>
+           
+           
           </div>
         </div>
 
