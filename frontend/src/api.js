@@ -35,25 +35,14 @@ export async function updatePreferences(userId, preferences) {
 }
 
 export async function updateUserProfile(userId, name, company) {
-<<<<<<< HEAD
   const response = await api.put('/auth/profile', {
     user_id: userId,
     name,
     company,
-=======
-  const response = await api.put('/auth/update-profile', {
-    user_id: userId,
-    name: name,
-    company: company,
->>>>>>> a22312cf2e87e2e27f7718ee48f4802920345e6c
   });
   return response.data;
 }
 
-<<<<<<< HEAD
-=======
-
->>>>>>> a22312cf2e87e2e27f7718ee48f4802920345e6c
 // ══════════════════════════════════════════════════════════════
 //  SCANNING
 // ══════════════════════════════════════════════════════════════
