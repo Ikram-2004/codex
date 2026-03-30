@@ -111,6 +111,11 @@ class UpdatePreferencesRequest(BaseModel):
     user_id: str
     preferences: UserPreferences
 
+class UpdateProfileRequest(BaseModel):
+    user_id: str
+    name: Optional[str] = None
+    company: Optional[str] = None
+
 # ── Helpers ────────────────────────────────────────────────────
 
 def is_valid_url(url: str) -> bool:
@@ -287,6 +292,25 @@ def update_preferences(req: UpdatePreferencesRequest, db: Session = Depends(get_
         raise HTTPException(status_code=404, detail="User not found")
 
     return {"success": True, "message": "Preferences updated"}
+
+
+@app.put("/auth/profile")
+def update_profile(req: UpdateProfileRequest, db: Session = Depends(get_db)):
+    """Update user profile info (name, company)."""
+    user = crud.update_user_profile(db, req.user_id, name=req.name, company=req.company)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "success": True,
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "name": user.name,
+            "company": user.company,
+            "created_at": user.created_at.isoformat() if user.created_at else "",
+        },
+    }
 
 
 # ══════════════════════════════════════════════════════════════
