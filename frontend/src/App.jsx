@@ -1284,29 +1284,40 @@ function LogsPage({ results }) {
 
 // ── Root App ───────────────────────────────────────────────────
 export default function App() {
-  const [hasVisitedLanding, setHasVisitedLanding] = useState(false);
+  const [hasVisitedLanding, setHasVisitedLanding] = useState(() => {
+    return !!localStorage.getItem('securepulse_user');
+  });
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('securepulse_mode');
     return saved !== null ? saved === 'dark' : true;
   });
-  const [user, setUser] = useState(null);
-  const [userPreferences, setUserPreferences] = useState(null);
-  const [page, setPage] = useState('dashboard');
+  const [user, setUser] = useState(() => {
+    try { const s = localStorage.getItem('securepulse_user'); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
+  const [userPreferences, setUserPreferences] = useState(() => {
+    try { const s = localStorage.getItem('securepulse_prefs'); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
+  const [page, setPage] = useState(() => {
+    return localStorage.getItem('securepulse_page') || 'dashboard';
+  });
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Persist user session to localStorage
+  useEffect(() => {
+    if (user) localStorage.setItem('securepulse_user', JSON.stringify(user));
+    else localStorage.removeItem('securepulse_user');
+  }, [user]);
+
+  // Persist current page to localStorage
+  useEffect(() => {
+    localStorage.setItem('securepulse_page', page);
+  }, [page]);
+
   useEffect(() => {
     localStorage.setItem('securepulse_mode', isDark ? 'dark' : 'light');
   }, [isDark]);
-
-  // Restore preferences from sessionStorage on mount
-  useEffect(() => {
-    const saved = sessionStorage.getItem('securepulse_prefs');
-    if (saved) {
-      try { setUserPreferences(JSON.parse(saved)); } catch {}
-    }
-  }, []);
 
   // Step 0: Landing page
   if (!hasVisitedLanding) {
@@ -1315,7 +1326,10 @@ export default function App() {
 
   // Step 1: Auth gate
   if (!user) {
-    return <AuthPage onAuth={(u) => setUser(u)} />;
+    return <AuthPage onAuth={(u) => {
+      setUser(u);
+      setHasVisitedLanding(true);
+    }} />;
   }
 
   // Step 2: Questionnaire gate (after login, before dashboard)
@@ -1325,7 +1339,7 @@ export default function App() {
         userName={user.name || user.email}
         onComplete={(prefs) => {
           setUserPreferences(prefs);
-          sessionStorage.setItem('securepulse_prefs', JSON.stringify(prefs));
+          localStorage.setItem('securepulse_prefs', JSON.stringify(prefs));
         }}
       />
     );
@@ -1358,7 +1372,10 @@ export default function App() {
     setUserPreferences(null);
     setResults(null);
     setPage('dashboard');
-    sessionStorage.removeItem('securepulse_prefs');
+    setHasVisitedLanding(false);
+    localStorage.removeItem('securepulse_user');
+    localStorage.removeItem('securepulse_prefs');
+    localStorage.removeItem('securepulse_page');
   }
 
   const renderPage = () => {
