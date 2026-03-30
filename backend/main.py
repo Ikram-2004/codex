@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from website_scanner import scan_website
@@ -8,6 +9,8 @@ from code_scanner import scan_codebase
 from scorer import calculate_final_score
 from chat import get_chat_response
 import asyncio
+import json
+import time
 from datetime import datetime
 
 app = FastAPI(title="SecurePulse API")
@@ -18,6 +21,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Global SSE event queue ─────────────────────────────────────
+event_queue: asyncio.Queue = asyncio.Queue(maxsize=500)
 
 # ── Request models ─────────────────────────────────────────────
 
@@ -57,11 +63,108 @@ def is_valid_url(url: str) -> bool:
         return False
     return True
 
+
+def classify_request(method: str, path: str, ua: str, status: int) -> dict:
+    """Classify incoming request severity and type."""
+    ua_lower = ua.lower()
+    path_lower = path.lower()
+
+    scanners = ["nuclei", "nmap", "sqlmap", "nikto", "burpsuite", "zgrab",
+                "masscan", "dirbuster", "gobuster", "wfuzz", "hydra", "curl/"]
+    is_scanner = any(s in ua_lower for s in scanners)
+
+    sqli_patterns = ["union", "select", "drop", "insert", "--", "1=1", "or 1"]
+    xss_patterns = ["<script", "javascript:", "onerror=", "alert("]
+    traversal = ["../", "..\\", "etc/passwd", "windows/system32"]
+    admin_paths = ["/admin", "/wp-admin", "/.env", "/config", "/phpmyadmin",
+                   "/.git", "/backup", "/shell", "/cmd", "/eval"]
+
+    full = path_lower + ua_lower
+    if any(p in full for p in sqli_patterns):
+        return {"sev": "CRITICAL", "type": "SQLi", "msg": "SQL injection probe detected"}
+    if any(p in full for p in xss_patterns):
+        return {"sev": "CRITICAL", "type": "XSS", "msg": "XSS payload in request"}
+    if any(p in full for p in traversal):
+        return {"sev": "CRITICAL", "type": "PathTraversal", "msg": "Directory traversal attempt"}
+    if any(p in path_lower for p in admin_paths):
+        return {"sev": "HIGH", "type": "Recon", "msg": f"Sensitive path probe: {path}"}
+    if is_scanner:
+        return {"sev": "HIGH", "type": "Scanner", "msg": f"Known scanner detected: {ua[:40]}"}
+    if status == 404 and method == "GET":
+        return {"sev": "INFO", "type": "Recon", "msg": f"404 probe: {path}"}
+    if status >= 500:
+        return {"sev": "HIGH", "type": "Error", "msg": f"Server error triggered: {path}"}
+    if method in ["POST", "PUT", "DELETE"] and "/scan" not in path:
+        return {"sev": "MEDIUM", "type": "Mutation", "msg": f"{method} on {path}"}
+    return {"sev": "INFO", "type": "Request", "msg": f"{method} {path} → {status}"}
+
+
+# ── Threat logger middleware ───────────────────────────────────
+
+@app.middleware("http")
+async def threat_logger(request, call_next):
+    start = time.time()
+    response = await call_next(request)
+    duration_ms = round((time.time() - start) * 1000)
+
+    # Skip /events itself to avoid feedback loop
+    if request.url.path == "/events":
+        return response
+
+    ip = request.client.host if request.client else "unknown"
+    ua = request.headers.get("user-agent", "unknown")
+    method = request.method
+    path = request.url.path
+    status = response.status_code
+
+    classification = classify_request(method, path, ua, status)
+
+    event = {
+        "ts": time.strftime("%H:%M:%S"),
+        "ip": ip,
+        "method": method,
+        "path": path,
+        "status": status,
+        "ua": ua[:80],
+        "duration_ms": duration_ms,
+        **classification,
+    }
+
+    try:
+        event_queue.put_nowait(event)
+    except asyncio.QueueFull:
+        pass
+
+    return response
+
+
 # ── Routes ─────────────────────────────────────────────────────
 
 @app.get("/")
 def root():
     return {"status": "SecurePulse API is running", "version": "2.0"}
+
+
+@app.get("/events")
+async def sse_events():
+    """Server-Sent Events stream for live threat terminal."""
+    async def generate():
+        while True:
+            try:
+                event = await asyncio.wait_for(event_queue.get(), timeout=15.0)
+                yield f"data: {json.dumps(event)}\n\n"
+            except asyncio.TimeoutError:
+                yield ": heartbeat\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
 
 
 @app.post("/scan")
@@ -112,16 +215,15 @@ def run_scan(request: ScanRequest):
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    """PulseAssistant - Claude-powered security advisor chat endpoint."""
+    """PulseAssistant - Groq-powered security advisor chat endpoint."""
     try:
         messages = [{"role": m.role, "content": m.content} for m in request.messages]
         response_text = await get_chat_response(messages, request.scan_context)
         return {"response": response_text, "success": True}
     except Exception as e:
         error_msg = str(e)
-        # Friendly error messages
         if "401" in error_msg or "authentication" in error_msg.lower():
-            msg = "API key invalid. Please check your ANTHROPIC_API_KEY in the .env file."
+            msg = "API key invalid. Please check your GROQ_API_KEY in the .env file."
         elif "429" in error_msg:
             msg = "Rate limit reached. Please wait a moment before sending another message."
         elif "timeout" in error_msg.lower():
@@ -133,10 +235,8 @@ async def chat(request: ChatRequest):
 
 @app.post("/ticket")
 async def create_ticket(request: TicketRequest):
-    """Create a support ticket. In production, this would email/create in your ticketing system."""
+    """Create a support ticket."""
     ticket_id = f"TKT-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    
-    # In a real app, you'd save to DB, send email, create in Jira/Linear etc.
     return {
         "success": True,
         "ticket_id": ticket_id,

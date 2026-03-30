@@ -3,6 +3,7 @@ import { runScan } from './api';
 import { generatePDFReport } from './generateReport';
 import AuthPage from './AuthPage';
 
+
 // ── colour tokens ──────────────────────────────────────────────
 const C = {
   bg: '#0f1117',
@@ -32,9 +33,9 @@ const C = {
 const severityConfig = {
   CRITICAL: { color: '#ff4757', bg: 'rgba(255,71,87,0.12)', border: 'rgba(255,71,87,0.25)', label: 'CRITICAL' },
   HIGH:     { color: '#ffa502', bg: 'rgba(255,165,2,0.12)',  border: 'rgba(255,165,2,0.25)',  label: 'HIGH'     },
-  MEDIUM:   { color: '#1e90ff', bg: 'rgba(30,144,255,0.12)',border: 'rgba(30,144,255,0.25)', label: 'MEDIUM'   },
-  INFO:     { color: '#a29bfe', bg: 'rgba(162,155,254,0.1)',border: 'rgba(162,155,254,0.2)', label: 'INFO'     },
-  PASS:     { color: '#00b894', bg: 'rgba(0,184,148,0.1)',  border: 'rgba(0,184,148,0.2)',   label: 'PASS'     },
+  MEDIUM:   { color: '#1e90ff', bg: 'rgba(30,144,255,0.12)', border: 'rgba(30,144,255,0.25)', label: 'MEDIUM'   },
+  INFO:     { color: '#a29bfe', bg: 'rgba(162,155,254,0.1)', border: 'rgba(162,155,254,0.2)', label: 'INFO'     },
+  PASS:     { color: '#00b894', bg: 'rgba(0,184,148,0.1)',   border: 'rgba(0,184,148,0.2)',   label: 'PASS'     },
 };
 
 const gradeConfig = {
@@ -45,7 +46,6 @@ const gradeConfig = {
   F: { color: '#d63031', glow: 'rgba(214,48,49,0.3)' },
 };
 
-// ── tiny helpers ───────────────────────────────────────────────
 const px = v => typeof v === 'number' ? `${v}px` : v;
 const flex = (dir='row', align='center', justify='flex-start', gap=0) => ({
   display:'flex', flexDirection:dir, alignItems:align, justifyContent:justify,
@@ -82,6 +82,11 @@ const Icon = {
   Settings: () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  ),
+  Terminal: () => (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
     </svg>
   ),
   Globe: () => (
@@ -154,10 +159,11 @@ const Icon = {
 // ── Sidebar ────────────────────────────────────────────────────
 function Sidebar({ activePage, setPage, results }) {
   const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: 'Dashboard' },
-    { id: 'scans',     label: 'Security Scans', icon: 'Scan' },
-    { id: 'logs',      label: 'Threat Logs', icon: 'Log' },
-    { id: 'settings',  label: 'Settings', icon: 'Settings' },
+    { id: 'dashboard', label: 'Dashboard',        icon: 'Dashboard' },
+    { id: 'scans',     label: 'Security Scans',   icon: 'Scan'      },
+    { id: 'logs',      label: 'Threat Logs',      icon: 'Log'       },
+    { id: 'terminal',  label: 'Live Terminal',    icon: 'Terminal'  },
+    { id: 'settings',  label: 'Settings',         icon: 'Settings'  },
   ];
 
   return (
@@ -223,6 +229,13 @@ function Sidebar({ activePage, setPage, results }) {
             }}>
               <IconComp />
               {item.label}
+              {item.id === 'terminal' && (
+                <span style={{
+                  marginLeft: 'auto', width: 6, height: 6, borderRadius: '50%',
+                  background: C.green, display: 'inline-block',
+                  animation: 'pulse 1.5s infinite',
+                }}/>
+              )}
             </button>
           );
         })}
@@ -241,17 +254,6 @@ function Sidebar({ activePage, setPage, results }) {
           <Icon.Support />
           Help Center
         </button>
-        <button onClick={() => setPage('settings')} style={{
-          ...flex('row','center','flex-start',10),
-          padding: '9px 12px', borderRadius: 8,
-          background: activePage === 'settings' ? C.accentSoft : 'transparent',
-          color: activePage === 'settings' ? C.accent : C.textSecondary,
-          border: 'none', cursor: 'pointer', fontSize: 13,
-          textAlign: 'left', width: '100%',
-        }}>
-          <Icon.Settings />
-          Settings
-        </button>
       </div>
     </aside>
   );
@@ -261,8 +263,9 @@ function Sidebar({ activePage, setPage, results }) {
 function TopNav({ activePage, setPage, results }) {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard' },
-    { id: 'scans',     label: 'Scans' },
-    { id: 'support',   label: 'Support' },
+    { id: 'scans',     label: 'Scans'     },
+    { id: 'terminal',  label: 'Terminal'  },
+    { id: 'support',   label: 'Support'   },
   ];
   return (
     <header style={{
@@ -315,23 +318,13 @@ function TopNav({ activePage, setPage, results }) {
 // ── Threat Gauge ───────────────────────────────────────────────
 function ThreatGauge({ pct = 74 }) {
   const r = 52, sw = 8;
-  const circ = 2 * Math.PI * r;
-  // half-circle: start at 180deg (bottom-left), go to 0 (bottom-right)
   const half = Math.PI * r;
   const filled = (pct / 100) * half;
-
   return (
     <div style={{ position:'relative', width:130, height:72, flexShrink:0 }}>
       <svg width="130" height="80" viewBox="0 0 130 80" style={{ overflow:'visible' }}>
-        {/* Track */}
-        <path
-          d={`M ${sw/2},65 A ${r},${r} 0 0 1 ${130-sw/2},65`}
-          fill="none" stroke={C.border} strokeWidth={sw} strokeLinecap="round"
-        />
-        {/* Fill */}
-        <path
-          d={`M ${sw/2},65 A ${r},${r} 0 0 1 ${130-sw/2},65`}
-          fill="none"
+        <path d={`M ${sw/2},65 A ${r},${r} 0 0 1 ${130-sw/2},65`} fill="none" stroke={C.border} strokeWidth={sw} strokeLinecap="round"/>
+        <path d={`M ${sw/2},65 A ${r},${r} 0 0 1 ${130-sw/2},65`} fill="none"
           stroke={pct > 70 ? C.green : pct > 40 ? C.amber : C.red}
           strokeWidth={sw} strokeLinecap="round"
           strokeDasharray={`${filled} ${half}`}
@@ -367,7 +360,6 @@ function AIAssistant({ results }) {
     const updatedMessages = [...messages, { from: 'user', text: q }];
     setMessages(updatedMessages);
     setIsLoading(true);
-
     try {
       const res = await fetch('http://localhost:8000/chat', {
         method: 'POST',
@@ -403,7 +395,6 @@ function AIAssistant({ results }) {
       borderRadius: 12, display:'flex', flexDirection:'column',
       overflow:'hidden',
     }}>
-      {/* Header */}
       <div style={{ padding: '14px 16px', borderBottom:`1px solid ${C.border}`, ...flex('row','center','space-between',0) }}>
         <div style={{ ...flex('row','center','flex-start',8) }}>
           <div style={{
@@ -424,8 +415,6 @@ function AIAssistant({ results }) {
           </div>
         </div>
       </div>
-
-      {/* Messages */}
       <div style={{ flex:1, overflowY:'auto', padding:'12px 14px', display:'flex', flexDirection:'column', gap:10, minHeight:0 }}>
         {messages.map((m,i) => (
           <div key={i} style={{ display:'flex', justifyContent: m.from==='user' ? 'flex-end' : 'flex-start' }}>
@@ -435,18 +424,15 @@ function AIAssistant({ results }) {
                 background:`linear-gradient(135deg,${C.accent},${C.pink})`,
                 display:'flex',alignItems:'center',justifyContent:'center',
                 color:'#fff', fontSize:10, marginRight:8, marginTop:2,
-              }}>
-                <Icon.Bot />
-              </div>
+              }}><Icon.Bot /></div>
             )}
             <div style={{
-              maxWidth:'75%', padding:'8px 10px', borderRadius: m.from==='user' ? '12px 12px 4px 12px' : '4px 12px 12px 12px',
+              maxWidth:'75%', padding:'8px 10px',
+              borderRadius: m.from==='user' ? '12px 12px 4px 12px' : '4px 12px 12px 12px',
               background: m.from==='user' ? C.accent : C.bg,
               border: m.from==='bot' ? `1px solid ${C.border}` : 'none',
               color: C.textPrimary, fontSize:12, lineHeight:'1.5',
-            }}>
-              {m.text}
-            </div>
+            }}>{m.text}</div>
           </div>
         ))}
         {isLoading && (
@@ -456,35 +442,25 @@ function AIAssistant({ results }) {
               background:`linear-gradient(135deg,${C.accent},${C.pink})`,
               display:'flex',alignItems:'center',justifyContent:'center',
               color:'#fff', fontSize:10, marginRight:8, marginTop:2,
-            }}>
-              <Icon.Bot />
-            </div>
+            }}><Icon.Bot /></div>
             <div style={{
               padding:'8px 10px', borderRadius:'4px 12px 12px 12px',
               background: C.bg, border:`1px solid ${C.border}`,
               color: C.textSecondary, fontSize:12,
-            }}>
-              ···
-            </div>
+            }}>···</div>
           </div>
         )}
         <div ref={bottomRef}/>
       </div>
-
-      {/* Quick Actions */}
       <div style={{ padding:'8px 14px 0', ...flex('row','center','flex-start',6), flexWrap:'wrap' }}>
         {quickActions.map(a => (
           <button key={a} onClick={() => setInput(a)} style={{
             padding:'4px 10px', borderRadius:20,
             background: C.bg, border:`1px solid ${C.border}`,
             color: C.textSecondary, fontSize:10, cursor:'pointer',
-          }}>
-            {a}
-          </button>
+          }}>{a}</button>
         ))}
       </div>
-
-      {/* Input */}
       <div style={{ padding:'10px 14px', ...flex('row','center','flex-start',8) }}>
         <input
           value={input}
@@ -495,8 +471,7 @@ function AIAssistant({ results }) {
           style={{
             flex:1, background: C.bg, border:`1px solid ${C.border}`,
             borderRadius:8, padding:'8px 10px', color: C.textPrimary,
-            fontSize:12, outline:'none',
-            opacity: isLoading ? 0.6 : 1,
+            fontSize:12, outline:'none', opacity: isLoading ? 0.6 : 1,
           }}
         />
         <button onClick={send} disabled={isLoading} style={{
@@ -504,9 +479,7 @@ function AIAssistant({ results }) {
           background: isLoading ? C.textMuted : C.accent,
           border:'none', color:'#fff', cursor: isLoading ? 'not-allowed' : 'pointer',
           display:'flex',alignItems:'center',justifyContent:'center',
-        }}>
-          <Icon.Send />
-        </button>
+        }}><Icon.Send /></button>
       </div>
     </div>
   );
@@ -529,13 +502,8 @@ function DashboardPage({ results, setPage }) {
 
   return (
     <div style={{ ...flex('row','flex-start','flex-start',16), flex:1, padding:24, minHeight:0 }}>
-      {/* Main */}
       <div style={{ flex:1, display:'flex', flexDirection:'column', gap:16, minWidth:0 }}>
-        {/* Sentinel Scan hero */}
-        <div style={{
-          background: C.bgCard, borderRadius:12, border:`1px solid ${C.border}`,
-          padding:24,
-        }}>
+        <div style={{ background: C.bgCard, borderRadius:12, border:`1px solid ${C.border}`, padding:24 }}>
           <h1 style={{ margin:'0 0 6px', color:C.textPrimary, fontSize:22, fontWeight:700 }}>Sentinel Scan</h1>
           <p style={{ margin:'0 0 16px', color:C.textSecondary, fontSize:13 }}>
             Instantly analyze any endpoint for vulnerabilities, malicious injections, or structural weaknesses.
@@ -549,10 +517,7 @@ function DashboardPage({ results, setPage }) {
               <span style={{ color:C.textMuted }}><Icon.Globe /></span>
               <input
                 placeholder="Enter target URL (e.g. https://api.secure-vault.io)"
-                style={{
-                  flex:1, background:'transparent', border:'none', outline:'none',
-                  color:C.textSecondary, fontSize:13,
-                }}
+                style={{ flex:1, background:'transparent', border:'none', outline:'none', color:C.textSecondary, fontSize:13 }}
               />
             </div>
             <button onClick={() => setPage('scans')} style={{
@@ -566,40 +531,24 @@ function DashboardPage({ results, setPage }) {
           </div>
         </div>
 
-        {/* Metrics row */}
         <div style={{ ...flex('row','stretch','flex-start',12) }}>
-          {/* Threat Level */}
-          <div style={{
-            background:C.bgCard, border:`1px solid ${C.border}`,
-            borderRadius:12, padding:20, flex:1,
-          }}>
-            <div style={{ color:C.textSecondary, fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:12 }}>
-              Threat Level
-            </div>
+          <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20, flex:1 }}>
+            <div style={{ color:C.textSecondary, fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase', marginBottom:12 }}>Threat Level</div>
             <div style={{ ...flex('row','flex-end','space-between',0) }}>
               <ThreatGauge pct={results ? results.final.score : 74} />
               <div style={{ display:'flex', flexDirection:'column', gap:8, fontSize:12 }}>
-                {[
-                  { dot: C.green, label:'Active Firewall' },
-                  { dot: C.red,   label:'2 Open Ports' },
-                  { dot: C.amber, label:'Encrypted' },
-                ].map(({dot,label},i) => (
+                {[{dot:C.green,label:'Active Firewall'},{dot:C.red,label:'2 Open Ports'},{dot:C.amber,label:'Encrypted'}].map(({dot,label},i) => (
                   <div key={i} style={{ ...flex('row','center','flex-start',6), color:C.textSecondary }}>
-                    <span style={{ width:8,height:8,borderRadius:'50%',background:dot,display:'inline-block',flexShrink:0 }}/>
-                    {label}
+                    <span style={{ width:8,height:8,borderRadius:'50%',background:dot,display:'inline-block',flexShrink:0 }}/>{label}
                   </div>
                 ))}
               </div>
             </div>
-            <div style={{ color:C.textMuted, fontSize:10, textTransform:'uppercase', letterSpacing:'0.08em', marginTop:8 }}>
-              Global Status
-            </div>
+            <div style={{ color:C.textMuted, fontSize:10, textTransform:'uppercase', letterSpacing:'0.08em', marginTop:8 }}>Global Status</div>
           </div>
 
-          {/* SecurePulse Active */}
           <div style={{
-            background:C.bgCard, border:`1px solid ${C.border}`,
-            borderRadius:12, padding:20, flex:1,
+            background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20, flex:1,
             display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10,
           }}>
             <div style={{
@@ -617,45 +566,26 @@ function DashboardPage({ results, setPage }) {
           </div>
         </div>
 
-        {/* Recent Scans */}
         <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20 }}>
           <div style={{ ...flex('row','center','space-between',0), marginBottom:16 }}>
             <div style={{ color:C.textPrimary, fontSize:14, fontWeight:600 }}>Recent Scans</div>
-            <button onClick={() => setPage('scans')} style={{
-              background:'none', border:'none', color:C.accent,
-              fontSize:12, fontWeight:600, cursor:'pointer',
-            }}>VIEW ALL</button>
+            <button onClick={() => setPage('scans')} style={{ background:'none', border:'none', color:C.accent, fontSize:12, fontWeight:600, cursor:'pointer' }}>VIEW ALL</button>
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {recentScans.map((scan,i) => (
-              <div key={i} style={{
-                ...flex('row','center','space-between',12),
-                padding:'10px 14px', borderRadius:8,
-                background: C.bg, border:`1px solid ${C.border}`,
-              }}>
+              <div key={i} style={{ ...flex('row','center','space-between',12), padding:'10px 14px', borderRadius:8, background: C.bg, border:`1px solid ${C.border}` }}>
                 <div style={{ ...flex('row','center','flex-start',10) }}>
-                  <div style={{
-                    width:28, height:28, borderRadius:'50%',
-                    background: statusBg[scan.status],
-                    display:'flex', alignItems:'center', justifyContent:'center',
-                    color: statusColors[scan.status], flexShrink:0,
-                  }}>
-                    {scan.status==='FAILED' ? <Icon.Alert /> : scan.status==='PASSED' ? <Icon.Check /> : <Icon.Alert />}
+                  <div style={{ width:28,height:28,borderRadius:'50%',background:statusBg[scan.status],display:'flex',alignItems:'center',justifyContent:'center',color:statusColors[scan.status],flexShrink:0 }}>
+                    {scan.status==='PASSED' ? <Icon.Check /> : <Icon.Alert />}
                   </div>
                   <div>
                     <div style={{ color:C.textPrimary, fontSize:13, fontWeight:500 }}>{scan.name}</div>
-                    <div style={{ color:C.textSecondary, fontSize:11 }}>
-                      {scan.critical > 0 ? `${scan.critical} Critical` : '0 Critical'} · {scan.warning} {scan.status==='FAILED'?'Warning':'Low'}
-                    </div>
+                    <div style={{ color:C.textSecondary, fontSize:11 }}>{scan.critical > 0 ? `${scan.critical} Critical` : '0 Critical'} · {scan.warning} Warning</div>
                   </div>
                 </div>
                 <div style={{ ...flex('row','center','flex-end',10), flexShrink:0 }}>
                   <span style={{ color:C.textMuted, fontSize:10 }}>{scan.ago}</span>
-                  <span style={{
-                    padding:'2px 8px', borderRadius:4,
-                    background:statusBg[scan.status], color:statusColors[scan.status],
-                    fontSize:10, fontWeight:700, letterSpacing:'0.05em',
-                  }}>{scan.status}</span>
+                  <span style={{ padding:'2px 8px', borderRadius:4, background:statusBg[scan.status], color:statusColors[scan.status], fontSize:10, fontWeight:700 }}>{scan.status}</span>
                 </div>
               </div>
             ))}
@@ -663,8 +593,7 @@ function DashboardPage({ results, setPage }) {
         </div>
       </div>
 
-      {/* AI Assistant */}
-      <div style={{ flexShrink:0, display:'flex', flexDirection:'column', gap:0 }}>
+      <div style={{ flexShrink:0 }}>
         <AIAssistant results={results} />
       </div>
     </div>
@@ -677,118 +606,43 @@ function ScanInputPage({ onScan, loading, error }) {
   const [appUrl, setAppUrl] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
 
-  function handleScan() {
-    onScan(websiteUrl, appUrl, repoUrl);
-  }
-
   return (
-    <div style={{
-      flex:1, display:'flex', flexDirection:'column',
-      alignItems:'center', justifyContent:'center',
-      padding: 40, gap:32,
-    }}>
-      {/* Hero */}
+    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding: 40, gap:32 }}>
       <div style={{ textAlign:'center' }}>
         <h1 style={{ margin:'0 0 8px', color:C.textPrimary, fontSize:28, fontWeight:700, letterSpacing:'-0.5px' }}>SecurePulse</h1>
         <p style={{ margin:0, color:C.textSecondary, fontSize:14 }}>Free security scanner for websites, apps, and codebases</p>
       </div>
-
-      {/* Card */}
-      <div style={{
-        width:'100%', maxWidth:560,
-        background:'rgba(240,241,245,0.04)', backdropFilter:'blur(10px)',
-        border:`1px solid ${C.border}`, borderRadius:16,
-        padding:32,
-      }}>
-        {/* Website URL */}
-        <div style={{ marginBottom:20 }}>
-          <label style={{ display:'block', color:C.textSecondary, fontSize:12, marginBottom:8 }}>Website URL</label>
-          <div style={{
-            ...flex('row','center','flex-start',0),
-            background: 'rgba(255,255,255,0.04)', border:`1px solid ${C.border}`,
-            borderRadius:8,
-          }}>
-            <span style={{ padding:'0 12px', color:C.textMuted }}><Icon.Globe /></span>
-            <input
-              value={websiteUrl}
-              onChange={e => setWebsiteUrl(e.target.value)}
-              placeholder="https://example.com"
-              style={{
-                flex:1, background:'transparent', border:'none', outline:'none',
-                color:C.textPrimary, fontSize:14, padding:'12px 12px 12px 0',
-              }}
-            />
-          </div>
-        </div>
-
-        {/* App URL */}
-        <div style={{ marginBottom:20 }}>
-          <label style={{ display:'block', color:C.textSecondary, fontSize:12, marginBottom:8 }}>
-            App URL (same as website URL if it's a web app)
-          </label>
-          <div style={{
-            ...flex('row','center','flex-start',0),
-            background: 'rgba(255,255,255,0.04)', border:`1px solid ${C.border}`,
-            borderRadius:8,
-          }}>
-            <span style={{ padding:'0 12px', color:C.textMuted }}><Icon.Lock /></span>
-            <input
-              value={appUrl}
-              onChange={e => setAppUrl(e.target.value)}
-              placeholder="https://myapp.com"
-              style={{
-                flex:1, background:'transparent', border:'none', outline:'none',
-                color:C.textPrimary, fontSize:14, padding:'12px 12px 12px 0',
-              }}
-            />
-          </div>
-        </div>
-
-        {/* Repo URL */}
-        <div style={{ marginBottom:28 }}>
-          <label style={{ display:'block', color:C.textSecondary, fontSize:12, marginBottom:8 }}>
-            GitHub Repo URL (optional)
-          </label>
-          <div style={{
-            ...flex('row','center','flex-start',0),
-            background: 'rgba(255,255,255,0.04)', border:`1px solid ${C.border}`,
-            borderRadius:8,
-          }}>
-            <span style={{ padding:'0 12px', color:C.textMuted }}><Icon.Code /></span>
-            <input
-              value={repoUrl}
-              onChange={e => setRepoUrl(e.target.value)}
-              placeholder="https://github.com/username/reponame"
-              style={{
-                flex:1, background:'transparent', border:'none', outline:'none',
-                color:C.textPrimary, fontSize:14, padding:'12px 12px 12px 0',
-              }}
-            />
-          </div>
-        </div>
-
+      <div style={{ width:'100%', maxWidth:560, background:'rgba(240,241,245,0.04)', backdropFilter:'blur(10px)', border:`1px solid ${C.border}`, borderRadius:16, padding:32 }}>
+        {[
+          { label:'Website URL', val:websiteUrl, set:setWebsiteUrl, placeholder:'https://example.com', icon:'Globe' },
+          { label:'App URL (same as website URL if it\'s a web app)', val:appUrl, set:setAppUrl, placeholder:'https://myapp.com', icon:'Lock' },
+          { label:'GitHub Repo URL (optional)', val:repoUrl, set:setRepoUrl, placeholder:'https://github.com/username/reponame', icon:'Code' },
+        ].map(({ label, val, set, placeholder, icon }, i) => {
+          const IconComp = Icon[icon];
+          return (
+            <div key={i} style={{ marginBottom: i < 2 ? 20 : 28 }}>
+              <label style={{ display:'block', color:C.textSecondary, fontSize:12, marginBottom:8 }}>{label}</label>
+              <div style={{ ...flex('row','center','flex-start',0), background:'rgba(255,255,255,0.04)', border:`1px solid ${C.border}`, borderRadius:8 }}>
+                <span style={{ padding:'0 12px', color:C.textMuted }}><IconComp /></span>
+                <input value={val} onChange={e => set(e.target.value)} placeholder={placeholder}
+                  style={{ flex:1, background:'transparent', border:'none', outline:'none', color:C.textPrimary, fontSize:14, padding:'12px 12px 12px 0' }}
+                />
+              </div>
+            </div>
+          );
+        })}
         {error && (
-          <div style={{
-            marginBottom:16, padding:'10px 14px', borderRadius:8,
-            background:'rgba(255,71,87,0.1)', border:'1px solid rgba(255,71,87,0.25)',
-            color:'#ff4757', fontSize:13,
-          }}>
+          <div style={{ marginBottom:16, padding:'10px 14px', borderRadius:8, background:'rgba(255,71,87,0.1)', border:'1px solid rgba(255,71,87,0.25)', color:'#ff4757', fontSize:13 }}>
             {error}
           </div>
         )}
-
-        <button
-          onClick={handleScan}
-          disabled={loading}
-          style={{
-            width:'100%', padding:'13px', borderRadius:8,
-            background: loading ? C.textMuted : `linear-gradient(135deg, ${C.accent}, #8b7cf8)`,
-            border:'none', color:'#fff', fontSize:15, fontWeight:600,
-            cursor: loading ? 'not-allowed' : 'pointer',
-            transition:'all 0.2s',
-            boxShadow: loading ? 'none' : `0 4px 24px rgba(108,92,231,0.35)`,
-          }}
-        >
+        <button onClick={() => onScan(websiteUrl, appUrl, repoUrl)} disabled={loading} style={{
+          width:'100%', padding:'13px', borderRadius:8,
+          background: loading ? C.textMuted : `linear-gradient(135deg, ${C.accent}, #8b7cf8)`,
+          border:'none', color:'#fff', fontSize:15, fontWeight:600,
+          cursor: loading ? 'not-allowed' : 'pointer', transition:'all 0.2s',
+          boxShadow: loading ? 'none' : `0 4px 24px rgba(108,92,231,0.35)`,
+        }}>
           {loading ? (
             <span style={{ ...flex('row','center','center',8) }}>
               <span style={{ animation:'spin 1s linear infinite', display:'inline-block' }}>⟳</span>
@@ -811,63 +665,41 @@ function ScansPage({ results, onNewScan, loading, error }) {
   const passes = findings.filter(f => f.severity === 'PASS');
 
   const surfaceCards = [
-    { label:'Website Security',    icon:<Icon.Globe/>,  stat:'OPTIMAL',    desc:'External perimeter and SSL handshake integrity checks.', metric:'Latency', val:'14ms', score: scores.website, color: C.pink },
-    { label:'Application Logic',   icon:<Icon.Lock/>,   stat:'HARDENED',   desc:'Authentication flow and privilege escalation vulnerability scan.', metric:'Complexity', val:'High', score: scores.app, color: C.accent },
-    { label:'Codebase Integrity',  icon:<Icon.Code/>,   stat:'SANITIZED',  desc:'Static analysis of dependency trees and secret detection.', metric:'Vulnerabilities', val:`${issues.filter(f=>f.surface==='Codebase').length} Detected`, score: scores.codebase, color: C.cyan },
+    { label:'Website Security',   icon:<Icon.Globe/>, stat:'OPTIMAL',   desc:'External perimeter and SSL handshake integrity checks.',                          metric:'Latency',         val:'14ms',                                              score: scores.website,  color: C.pink   },
+    { label:'Application Logic',  icon:<Icon.Lock/>,  stat:'HARDENED',  desc:'Authentication flow and privilege escalation vulnerability scan.',                metric:'Complexity',      val:'High',                                              score: scores.app,      color: C.accent },
+    { label:'Codebase Integrity', icon:<Icon.Code/>,  stat:'SANITIZED', desc:'Static analysis of dependency trees and secret detection.',                       metric:'Vulnerabilities', val:`${issues.filter(f=>f.surface==='Codebase').length} Detected`, score: scores.codebase, color: C.cyan   },
   ];
 
   return (
     <div style={{ flex:1, overflowY:'auto', padding:24, display:'flex', flexDirection:'column', gap:20 }}>
-      {/* Top row */}
       <div style={{ ...flex('row','stretch','flex-start',16) }}>
-        {/* Score block */}
-        <div style={{
-          width:180, flexShrink:0,
-          background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12,
-          display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-          padding:20, gap:8,
-        }}>
+        <div style={{ width:180, flexShrink:0, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:20, gap:8 }}>
           <div style={{ fontSize:11, color:C.textMuted, textTransform:'uppercase', letterSpacing:'0.08em' }}>Security Integrity Score</div>
           <div style={{ fontSize:64, fontWeight:900, color:C.textPrimary, lineHeight:1, position:'relative' }}>
             {final.score}
             <span style={{ fontSize:20, color:gc.color, fontWeight:700, position:'absolute', top:8, right:-28 }}>/100</span>
           </div>
-          <div style={{
-            ...flex('row','center','center',6),
-            padding:'4px 12px', borderRadius:20,
-            background:`rgba(108,92,231,0.15)`, border:`1px solid ${C.borderLight}`,
-            color:C.accent, fontSize:11, fontWeight:600,
-          }}>
+          <div style={{ ...flex('row','center','center',6), padding:'4px 12px', borderRadius:20, background:`rgba(108,92,231,0.15)`, border:`1px solid ${C.borderLight}`, color:C.accent, fontSize:11, fontWeight:600 }}>
             <Icon.Shield /> ELITE STATUS
           </div>
         </div>
-
-        {/* Scan info */}
-        <div style={{
-          flex:1, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20,
-        }}>
+        <div style={{ flex:1, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20 }}>
           <div style={{ ...flex('row','flex-start','space-between',0) }}>
             <div>
               <h2 style={{ margin:'0 0 4px', color:C.textPrimary, fontSize:20, fontWeight:700 }}>Internal Mainframe Scan</h2>
-              <div style={{ color:C.textSecondary, fontSize:12 }}>
-                Target: <code style={{ background:C.bg, padding:'2px 6px', borderRadius:4, color:C.accent, fontSize:11 }}>
-                  {results._target || 'api-cluster-04.securepulse.io'}
-                </code>
-              </div>
+              <div style={{ color:C.textSecondary, fontSize:12 }}>Target: <code style={{ background:C.bg, padding:'2px 6px', borderRadius:4, color:C.accent, fontSize:11 }}>{results._target || 'api-cluster-04.securepulse.io'}</code></div>
             </div>
             <div style={{ textAlign:'right' }}>
               <div style={{ color:C.textMuted, fontSize:10, textTransform:'uppercase', letterSpacing:'0.08em' }}>Last Scan Completed</div>
-              <div style={{ color:C.textPrimary, fontSize:13, fontWeight:500 }}>
-                {new Date().toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' })} — {new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit', second:'2-digit' })} GMT
-              </div>
+              <div style={{ color:C.textPrimary, fontSize:13, fontWeight:500 }}>{new Date().toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'})} — {new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',second:'2-digit'})} GMT</div>
             </div>
           </div>
           <div style={{ ...flex('row','flex-start','flex-start',0), marginTop:20, gap:32 }}>
             {[
               { label:'TIME ELAPSED', value:'0.42s' },
               { label:'ENDPOINTS', value: findings.length },
-              { label:'THREAT LEVEL', value: issues.length === 0 ? 'NULL' : issues.length < 3 ? 'LOW' : 'HIGH', col: issues.length === 0 ? C.green : issues.length < 3 ? C.amber : C.red },
-              { label:'STATUS', value: final.grade === 'A' ? 'STABLE' : final.grade === 'F' ? 'CRITICAL' : 'REVIEW', col: final.grade === 'A' ? C.pink : final.grade === 'F' ? C.red : C.amber },
+              { label:'THREAT LEVEL', value: issues.length===0?'NULL':issues.length<3?'LOW':'HIGH', col: issues.length===0?C.green:issues.length<3?C.amber:C.red },
+              { label:'STATUS', value: final.grade==='A'?'STABLE':final.grade==='F'?'CRITICAL':'REVIEW', col: final.grade==='A'?C.pink:final.grade==='F'?C.red:C.amber },
             ].map(({label,value,col},i) => (
               <div key={i}>
                 <div style={{ color:C.textMuted, fontSize:10, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:4 }}>{label}</div>
@@ -878,26 +710,19 @@ function ScansPage({ results, onNewScan, loading, error }) {
         </div>
       </div>
 
-      {/* Surface cards */}
       <div style={{ ...flex('row','stretch','flex-start',12) }}>
         {surfaceCards.map(({label,icon,stat,desc,metric,val,score,color},i) => (
-          <div key={i} style={{
-            flex:1, background:C.bgCard, border:`1px solid ${C.border}`,
-            borderLeft: `3px solid ${color}`,
-            borderRadius:12, padding:16,
-            display:'flex', flexDirection:'column', gap:8,
-          }}>
+          <div key={i} style={{ flex:1, background:C.bgCard, border:`1px solid ${C.border}`, borderLeft:`3px solid ${color}`, borderRadius:12, padding:16, display:'flex', flexDirection:'column', gap:8 }}>
             <div style={{ ...flex('row','center','space-between',0) }}>
-              <span style={{ color: color }}>{icon}</span>
-              <span style={{ color:color, fontSize:10, fontWeight:700, letterSpacing:'0.05em' }}>{stat}</span>
+              <span style={{ color }}>{icon}</span>
+              <span style={{ color, fontSize:10, fontWeight:700, letterSpacing:'0.05em' }}>{stat}</span>
             </div>
             <div style={{ color:C.textPrimary, fontSize:14, fontWeight:600 }}>{label}</div>
             <div style={{ color:C.textSecondary, fontSize:11, lineHeight:1.5 }}>{desc}</div>
             {score !== null && score !== undefined && (
               <>
                 <div style={{ ...flex('row','center','space-between',0), fontSize:10, color:C.textMuted }}>
-                  <span>{metric}</span>
-                  <span style={{ color:C.textPrimary, fontWeight:600 }}>{val}</span>
+                  <span>{metric}</span><span style={{ color:C.textPrimary, fontWeight:600 }}>{val}</span>
                 </div>
                 <div style={{ height:3, background:C.border, borderRadius:2, overflow:'hidden' }}>
                   <div style={{ height:'100%', width:`${score}%`, background:color, borderRadius:2, transition:'width 1s ease' }}/>
@@ -908,52 +733,29 @@ function ScansPage({ results, onNewScan, loading, error }) {
         ))}
       </div>
 
-      {/* Issues + Passing */}
       <div style={{ ...flex('row','flex-start','flex-start',16) }}>
-        {/* Issues */}
         <div style={{ flex:1, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20 }}>
           <div style={{ ...flex('row','center','space-between',0), marginBottom:16 }}>
             <div style={{ color:C.textPrimary, fontSize:14, fontWeight:600 }}>Issues Found ({issues.length})</div>
-            {issues.length > 0 && (
-              <span style={{ padding:'2px 8px', borderRadius:4, background:'rgba(255,71,87,0.15)', color:'#ff4757', fontSize:10, fontWeight:700 }}>
-                CRITICAL PRIORITY
-              </span>
-            )}
+            {issues.length > 0 && <span style={{ padding:'2px 8px', borderRadius:4, background:'rgba(255,71,87,0.15)', color:'#ff4757', fontSize:10, fontWeight:700 }}>CRITICAL PRIORITY</span>}
           </div>
           {issues.length === 0 ? (
             <div style={{ textAlign:'center', padding:'32px 0' }}>
-              <div style={{
-                width:56, height:56, borderRadius:12, margin:'0 auto 12px',
-                background:C.accentSoft, display:'flex', alignItems:'center', justifyContent:'center',
-                color:C.accent,
-              }}>
-                <Icon.Shield />
-              </div>
+              <div style={{ width:56,height:56,borderRadius:12,margin:'0 auto 12px',background:C.accentSoft,display:'flex',alignItems:'center',justifyContent:'center',color:C.accent }}><Icon.Shield /></div>
               <div style={{ color:C.textPrimary, fontSize:14, fontWeight:500 }}>No Threats Detected</div>
-              <div style={{ color:C.textSecondary, fontSize:12, marginTop:4 }}>
-                Your system is currently meeting all security parameters. No action required.
-              </div>
+              <div style={{ color:C.textSecondary, fontSize:12, marginTop:4 }}>Your system is currently meeting all security parameters.</div>
             </div>
           ) : (
             <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
               {issues.map((f,i) => {
                 const sc = severityConfig[f.severity] || severityConfig.INFO;
                 return (
-                  <div key={i} style={{
-                    padding:'12px 14px', borderRadius:8,
-                    background:C.bg, border:`1px solid ${C.border}`,
-                  }}>
+                  <div key={i} style={{ padding:'12px 14px', borderRadius:8, background:C.bg, border:`1px solid ${C.border}` }}>
                     <div style={{ ...flex('row','flex-start','flex-start',10) }}>
-                      <span style={{
-                        padding:'2px 8px', borderRadius:4, flexShrink:0,
-                        background:sc.bg, color:sc.color, border:`1px solid ${sc.border}`,
-                        fontSize:10, fontWeight:700, letterSpacing:'0.04em', marginTop:1,
-                      }}>{sc.label}</span>
+                      <span style={{ padding:'2px 8px', borderRadius:4, flexShrink:0, background:sc.bg, color:sc.color, border:`1px solid ${sc.border}`, fontSize:10, fontWeight:700, letterSpacing:'0.04em', marginTop:1 }}>{sc.label}</span>
                       <div>
                         <div style={{ color:C.textPrimary, fontSize:13, fontWeight:500, marginBottom:4 }}>{f.title}</div>
-                        <div style={{ color:C.textSecondary, fontSize:11 }}>
-                          <strong>Surface:</strong> {f.surface} &nbsp;·&nbsp; <strong>Fix:</strong> {f.fix}
-                        </div>
+                        <div style={{ color:C.textSecondary, fontSize:11 }}><strong>Surface:</strong> {f.surface} &nbsp;·&nbsp; <strong>Fix:</strong> {f.fix}</div>
                       </div>
                     </div>
                   </div>
@@ -963,44 +765,29 @@ function ScansPage({ results, onNewScan, loading, error }) {
           )}
         </div>
 
-        {/* Passing Checks */}
         <div style={{ flex:1, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20 }}>
           <div style={{ ...flex('row','center','space-between',0), marginBottom:16 }}>
             <div style={{ color:C.textPrimary, fontSize:14, fontWeight:600 }}>Passing Checks</div>
-            <button
-              onClick={() => generatePDFReport(results)}
-              style={{
-                ...flex('row', 'center', 'center', 8),
-                padding: '10px 20px', borderRadius: 8,
-                background: `linear-gradient(135deg, ${C.accent}, #8b7cf8)`,
-                border: 'none', color: '#fff',
-                fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                boxShadow: `0 4px 16px rgba(108,92,231,0.3)`,
-                flexShrink: 0,
-              }}
-            >
-              <Icon.Download />
-              Download Report
+            <button onClick={() => generatePDFReport(results)} style={{
+              ...flex('row','center','center',8),
+              padding:'10px 20px', borderRadius:8,
+              background:`linear-gradient(135deg, ${C.accent}, #8b7cf8)`,
+              border:'none', color:'#fff', fontSize:13, fontWeight:600, cursor:'pointer',
+              boxShadow:`0 4px 16px rgba(108,92,231,0.3)`, flexShrink:0,
+            }}>
+              <Icon.Download /> Download Report
             </button>
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
             {passes.length === 0 ? (
               <div style={{ color:C.textSecondary, fontSize:13, textAlign:'center', padding:'24px 0' }}>No passing checks yet.</div>
             ) : passes.map((f,i) => (
-              <div key={i} style={{
-                ...flex('row','center','space-between',12),
-                padding:'12px 14px', borderRadius:8,
-                background:C.bg, border:`1px solid ${C.border}`,
-              }}>
+              <div key={i} style={{ ...flex('row','center','space-between',12), padding:'12px 14px', borderRadius:8, background:C.bg, border:`1px solid ${C.border}` }}>
                 <div>
                   <div style={{ color:C.textPrimary, fontSize:13, fontWeight:500 }}>{f.title}</div>
                   {f.fix && <div style={{ color:C.textSecondary, fontSize:11, marginTop:2 }}>{f.fix}</div>}
                 </div>
-                <div style={{
-                  width:22, height:22, borderRadius:'50%', flexShrink:0,
-                  background:'rgba(0,184,148,0.15)', border:'1px solid rgba(0,184,148,0.3)',
-                  display:'flex', alignItems:'center', justifyContent:'center', color:C.green,
-                }}>
+                <div style={{ width:22,height:22,borderRadius:'50%',flexShrink:0,background:'rgba(0,184,148,0.15)',border:'1px solid rgba(0,184,148,0.3)',display:'flex',alignItems:'center',justifyContent:'center',color:C.green }}>
                   <Icon.Check />
                 </div>
               </div>
@@ -1009,13 +796,8 @@ function ScansPage({ results, onNewScan, loading, error }) {
         </div>
       </div>
 
-      {/* New Scan button */}
       <div style={{ textAlign:'center' }}>
-        <button onClick={() => onNewScan(null)} style={{
-          padding:'10px 28px', borderRadius:8,
-          background:'transparent', border:`1px solid ${C.border}`,
-          color:C.textSecondary, fontSize:13, cursor:'pointer',
-        }}>
+        <button onClick={() => onNewScan(null)} style={{ padding:'10px 28px', borderRadius:8, background:'transparent', border:`1px solid ${C.border}`, color:C.textSecondary, fontSize:13, cursor:'pointer' }}>
           ← Run New Scan
         </button>
       </div>
@@ -1023,48 +805,235 @@ function ScansPage({ results, onNewScan, loading, error }) {
   );
 }
 
+// ── Live Threat Terminal Page ──────────────────────────────────
+function ThreatTerminalPage() {
+  const [events, setEvents] = useState([]);
+  const [tab, setTab] = useState('feed');
+  const [stats, setStats] = useState({ total: 0, blocked: 0, critical: 0, ips: new Set() });
+  const [connected, setConnected] = useState(false);
+  const [clock, setClock] = useState('');
+  const vectorCounts = useRef({});
+  const ipCounts = useRef({});
+
+  useEffect(() => {
+    const tick = setInterval(() => {
+      const d = new Date();
+      setClock(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}:${String(d.getSeconds()).padStart(2,'0')}`);
+    }, 1000);
+    return () => clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    const es = new EventSource('http://localhost:8000/events');
+    es.onopen = () => setConnected(true);
+    es.onerror = () => setConnected(false);
+    es.onmessage = (e) => {
+      try {
+        const ev = JSON.parse(e.data);
+        setEvents(prev => [ev, ...prev].slice(0, 80));
+        setStats(prev => {
+          const newIps = new Set(prev.ips);
+          newIps.add(ev.ip);
+          return {
+            total: prev.total + 1,
+            blocked: prev.blocked + (ev.sev === 'BLOCKED' ? 1 : 0),
+            critical: prev.critical + (ev.sev === 'CRITICAL' ? 1 : 0),
+            ips: newIps,
+          };
+        });
+        ipCounts.current[ev.ip] = (ipCounts.current[ev.ip] || 0) + 1;
+        vectorCounts.current[ev.type] = (vectorCounts.current[ev.type] || 0) + 1;
+      } catch {}
+    };
+    return () => es.close();
+  }, []);
+
+  const sevStyle = {
+    CRITICAL: { color:'#ff4757', bg:'rgba(255,71,87,0.15)'  },
+    HIGH:     { color:'#ffa502', bg:'rgba(255,165,2,0.13)'  },
+    MEDIUM:   { color:'#4da6ff', bg:'rgba(30,144,255,0.13)' },
+    INFO:     { color:'#a29bfe', bg:'rgba(162,155,254,0.1)' },
+    BLOCKED:  { color:'#00b894', bg:'rgba(0,184,148,0.12)'  },
+  };
+
+  const topVectors = Object.entries(vectorCounts.current).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const topIps     = Object.entries(ipCounts.current).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const maxVec = topVectors[0]?.[1] || 1;
+  const maxIp  = topIps[0]?.[1] || 1;
+
+  const mono = "'Courier New', monospace";
+  const termBg     = '#0a0e1a';
+  const termBorder = '#1e2535';
+  const termCard   = '#0f1117';
+  const termMuted  = '#3a4560';
+  const termSec    = '#8892a4';
+  const vecColors  = ['#ff4757','#ffa502','#6c5ce7','#4da6ff','#e84393','#a29bfe'];
+
+  return (
+    <div style={{ flex:1, padding:24, display:'flex', flexDirection:'column', gap:16, overflowY:'auto' }}>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+        <div>
+          <h1 style={{ margin:'0 0 4px', color:C.textPrimary, fontSize:22, fontWeight:700 }}>Live Threat Terminal</h1>
+          <p style={{ margin:0, color:C.textSecondary, fontSize:13 }}>Real HTTP requests hitting your SecurePulse backend — live.</p>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:8, padding:'6px 14px', borderRadius:8,
+          background: connected ? 'rgba(0,184,148,0.1)' : 'rgba(255,71,87,0.1)',
+          border: `1px solid ${connected ? 'rgba(0,184,148,0.3)' : 'rgba(255,71,87,0.3)'}`,
+        }}>
+          <span style={{ width:8,height:8,borderRadius:'50%',display:'inline-block', background: connected ? '#00b894' : '#ff4757' }}/>
+          <span style={{ color: connected?'#00b894':'#ff4757', fontSize:11, fontWeight:700, fontFamily:mono, letterSpacing:'0.08em' }}>
+            {connected ? 'CONNECTED' : 'DISCONNECTED'}
+          </span>
+        </div>
+      </div>
+
+      <div style={{ background:termBg, borderRadius:12, border:`1px solid ${termBorder}`, overflow:'hidden' }}>
+        {/* Title bar */}
+        <div style={{ background:'#11151e', borderBottom:`1px solid ${termBorder}`, padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <div style={{ display:'flex', gap:6 }}>
+              {['#ff4757','#ffa502','#00b894'].map((c,i) => <div key={i} style={{ width:10,height:10,borderRadius:'50%',background:c }}/>)}
+            </div>
+            <span style={{ color:termMuted, fontSize:11, fontFamily:mono }}>securepulse — threat-monitor v2.4.1</span>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <span style={{ color:'#00b894', fontSize:10, fontFamily:mono, letterSpacing:'0.08em' }}>{connected ? 'LIVE' : 'OFFLINE'}</span>
+            <span style={{ color:termMuted, fontSize:10, fontFamily:mono }}>{clock}</span>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{ display:'flex', borderBottom:`1px solid ${termBorder}`, background:termBg }}>
+          {[['feed','EVENT FEED'],['geo','IP INTEL'],['vectors','ATTACK VECTORS']].map(([id,label]) => (
+            <button key={id} onClick={() => setTab(id)} style={{
+              padding:'8px 16px', fontSize:11, cursor:'pointer', fontFamily:mono,
+              background:'none', border:'none',
+              borderBottom: tab===id ? `2px solid #6c5ce7` : '2px solid transparent',
+              color: tab===id ? '#6c5ce7' : termMuted, transition:'all 0.15s',
+            }}>{label}</button>
+          ))}
+        </div>
+
+        {/* Feed */}
+        {tab === 'feed' && (
+          <div style={{ height:340, overflowY:'auto', padding:'8px 0' }}>
+            {events.length === 0 ? (
+              <div style={{ textAlign:'center', padding:'60px 0', color:termMuted, fontFamily:mono, fontSize:12 }}>
+                {connected ? 'Waiting for incoming requests...' : 'Backend disconnected — start FastAPI on port 8000'}
+              </div>
+            ) : events.map((ev,i) => {
+              const s = sevStyle[ev.sev] || sevStyle.INFO;
+              return (
+                <div key={i} style={{ display:'flex', alignItems:'center', padding:'4px 16px', fontSize:11, lineHeight:1.7, borderBottom:`1px solid rgba(255,255,255,0.03)`, fontFamily:mono }}>
+                  <span style={{ color:termMuted, minWidth:80 }}>[{ev.ts}]</span>
+                  <span style={{ fontSize:9, fontWeight:700, padding:'1px 6px', borderRadius:3, background:s.bg, color:s.color, minWidth:60, textAlign:'center', letterSpacing:'0.04em', marginRight:10 }}>{ev.sev}</span>
+                  <span style={{ color:'#6c5ce7', minWidth:120 }}>{ev.ip}</span>
+                  <span style={{ color:termMuted, minWidth:50 }}>{ev.method}</span>
+                  <span style={{ color:'#e0e3ea', flex:1 }}>{ev.msg}</span>
+                  <span style={{ color:termMuted, fontSize:10 }}>{ev.duration_ms}ms</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* IP Intel */}
+        {tab === 'geo' && (
+          <div style={{ padding:16, height:340, overflowY:'auto' }}>
+            <div style={{ color:termMuted, fontSize:10, fontFamily:mono, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>
+              Top source IPs — {stats.ips.size} unique
+            </div>
+            {topIps.length === 0 ? (
+              <div style={{ color:termMuted, fontFamily:mono, fontSize:12, textAlign:'center', paddingTop:40 }}>No data yet</div>
+            ) : topIps.map(([ip,count],i) => (
+              <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 0', borderBottom:`1px solid rgba(255,255,255,0.03)` }}>
+                <span style={{ color:'#6c5ce7', minWidth:130, fontFamily:mono, fontSize:11 }}>{ip}</span>
+                <div style={{ flex:1, background:termBorder, borderRadius:2, height:4, overflow:'hidden' }}>
+                  <div style={{ height:'100%', width:`${Math.round(count/maxIp*100)}%`, background:'#6c5ce7', borderRadius:2, transition:'width 0.5s ease' }}/>
+                </div>
+                <span style={{ color:termSec, minWidth:30, textAlign:'right', fontFamily:mono, fontSize:11 }}>{count}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Attack Vectors */}
+        {tab === 'vectors' && (
+          <div style={{ padding:16, height:340, overflowY:'auto' }}>
+            <div style={{ color:termMuted, fontSize:10, fontFamily:mono, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>
+              Attack type breakdown — {stats.total} total events
+            </div>
+            {topVectors.length === 0 ? (
+              <div style={{ color:termMuted, fontFamily:mono, fontSize:12, textAlign:'center', paddingTop:40 }}>No data yet</div>
+            ) : topVectors.map(([type,count],i) => (
+              <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'6px 0', borderBottom:`1px solid rgba(255,255,255,0.03)` }}>
+                <span style={{ color:termSec, minWidth:130, fontFamily:mono, fontSize:11 }}>{type}</span>
+                <div style={{ flex:1, background:termBorder, borderRadius:2, height:4, overflow:'hidden' }}>
+                  <div style={{ height:'100%', width:`${Math.round(count/maxVec*100)}%`, background:vecColors[i%vecColors.length], borderRadius:2, transition:'width 0.5s ease' }}/>
+                </div>
+                <span style={{ color:vecColors[i%vecColors.length], minWidth:30, textAlign:'right', fontFamily:mono, fontSize:11 }}>{count}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Stats bar */}
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:1, background:termBorder, borderTop:`1px solid ${termBorder}` }}>
+          {[
+            { val:stats.total,     label:'Events',     color:'#a29bfe' },
+            { val:stats.blocked,   label:'Blocked',    color:'#00b894' },
+            { val:stats.critical,  label:'Critical',   color:'#ff4757' },
+            { val:stats.ips.size,  label:'Unique IPs', color:'#6c5ce7' },
+          ].map(({val,label,color},i) => (
+            <div key={i} style={{ background:termCard, padding:'10px 14px', textAlign:'center' }}>
+              <div style={{ fontSize:20, fontWeight:700, color, fontFamily:mono }}>{val}</div>
+              <div style={{ fontSize:10, color:'#4a5568', textTransform:'uppercase', letterSpacing:'0.08em', marginTop:2 }}>{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {!connected && (
+        <div style={{ padding:'14px 18px', borderRadius:10, background:'rgba(108,92,231,0.08)', border:'1px solid rgba(108,92,231,0.2)', color:C.textSecondary, fontSize:13 }}>
+          <strong style={{ color:C.textPrimary }}>Backend not connected.</strong> Make sure FastAPI is running on port 8000.
+          <code style={{ display:'block', marginTop:8, background:'#0a0e1a', padding:'8px 12px', borderRadius:6, fontSize:12, color:'#a29bfe' }}>
+            uvicorn main:app --reload --port 8000
+          </code>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fadeInRow { from { opacity:0; background:rgba(108,92,231,0.08); } to { opacity:1; background:transparent; } }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+      `}</style>
+    </div>
+  );
+}
+
 // ── Support Page ───────────────────────────────────────────────
 function SupportPage() {
   const domains = [
-    { icon:'🛡️', color: C.pink,  title:'Account Security',   desc:'Master multi-factor authentication, biometric locks, and session management protocols.', links:['Resetting administrative credentials','Configuring hardware security keys'] },
-    { icon:'⊙',  color: C.accent, title:'Scan Config',        desc:'Fine-tune your perimeter scan frequency and threat detection depth.', links:[] },
-    { icon:'◈',  color: C.cyan,   title:'API Docs',           desc:"Integrate Sentinel's intelligence into your existing infrastructure.", links:[] },
-    { icon:'🪙', color: C.amber,  title:'Billing & Plans',    desc:'Review enterprise tier features and resource allocation.', links:[] },
-    { icon:'⚠️', color: C.red,    title:'Incident Response',  desc:'What to do when a Level 5 breach is detected in your network subnet.', links:['View Protocols →'] },
+    { icon:'🛡️', color:C.pink,   title:'Account Security',  desc:'Master multi-factor authentication, biometric locks, and session management protocols.', links:['Resetting administrative credentials','Configuring hardware security keys'] },
+    { icon:'⊙',  color:C.accent, title:'Scan Config',        desc:'Fine-tune your perimeter scan frequency and threat detection depth.', links:[] },
+    { icon:'◈',  color:C.cyan,   title:'API Docs',           desc:"Integrate Sentinel's intelligence into your existing infrastructure.", links:[] },
+    { icon:'🪙', color:C.amber,  title:'Billing & Plans',    desc:'Review enterprise tier features and resource allocation.', links:[] },
+    { icon:'⚠️', color:C.red,    title:'Incident Response',  desc:'What to do when a Level 5 breach is detected in your network subnet.', links:['View Protocols →'] },
   ];
 
   return (
     <div style={{ flex:1, overflowY:'auto', padding:32 }}>
-      {/* Hero */}
       <div style={{ textAlign:'center', marginBottom:40 }}>
-        <h1 style={{ margin:'0 0 8px', color:C.textPrimary, fontSize:28, fontWeight:700 }}>
-          How can we help you, Sentinel?
-        </h1>
-        <p style={{ margin:'0 0 24px', color:C.textSecondary, fontSize:14 }}>
-          Access the central intelligence repository for all Security Operations.
-        </p>
-        <div style={{
-          maxWidth:520, margin:'0 auto',
-          ...flex('row','center','flex-start',0),
-          background:C.bgCard, border:`1px solid ${C.border}`,
-          borderRadius:10,
-        }}>
+        <h1 style={{ margin:'0 0 8px', color:C.textPrimary, fontSize:28, fontWeight:700 }}>How can we help you, Sentinel?</h1>
+        <p style={{ margin:'0 0 24px', color:C.textSecondary, fontSize:14 }}>Access the central intelligence repository for all Security Operations.</p>
+        <div style={{ maxWidth:520, margin:'0 auto', ...flex('row','center','flex-start',0), background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:10 }}>
           <span style={{ padding:'0 14px', color:C.textMuted }}><Icon.Search /></span>
-          <input
-            placeholder="Search for documentation, troubleshooting, or API keys..."
-            style={{
-              flex:1, background:'transparent', border:'none', outline:'none',
-              color:C.textSecondary, fontSize:13, padding:'12px 0',
-            }}
+          <input placeholder="Search for documentation, troubleshooting, or API keys..."
+            style={{ flex:1, background:'transparent', border:'none', outline:'none', color:C.textSecondary, fontSize:13, padding:'12px 0' }}
           />
-          <button style={{
-            margin:6, padding:'6px 16px', borderRadius:8,
-            background:C.accent, border:'none', color:'#fff', fontSize:12, fontWeight:600, cursor:'pointer',
-          }}>Analyze</button>
+          <button style={{ margin:6, padding:'6px 16px', borderRadius:8, background:C.accent, border:'none', color:'#fff', fontSize:12, fontWeight:600, cursor:'pointer' }}>Analyze</button>
         </div>
       </div>
 
-      {/* Knowledge Domains */}
       <div style={{ marginBottom:40 }}>
         <div style={{ ...flex('row','center','flex-start',8), marginBottom:20 }}>
           <div style={{ width:3, height:18, background:C.pink, borderRadius:2 }}/>
@@ -1072,12 +1041,7 @@ function SupportPage() {
         </div>
         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))', gap:14 }}>
           {domains.map((d,i) => (
-            <div key={i} style={{
-              background:C.bgCard, border:`1px solid ${C.border}`,
-              borderTop:`3px solid ${d.color}`,
-              borderRadius:12, padding:20,
-              cursor:'pointer', transition:'all 0.2s',
-            }}>
+            <div key={i} style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderTop:`3px solid ${d.color}`, borderRadius:12, padding:20, cursor:'pointer' }}>
               <div style={{ fontSize:20, marginBottom:10 }}>{d.icon}</div>
               <div style={{ color:C.textPrimary, fontSize:14, fontWeight:600, marginBottom:6 }}>{d.title}</div>
               <div style={{ color:C.textSecondary, fontSize:12, lineHeight:1.5, marginBottom:10 }}>{d.desc}</div>
@@ -1091,59 +1055,37 @@ function SupportPage() {
         </div>
       </div>
 
-      {/* Bottom row */}
       <div style={{ ...flex('row','flex-start','flex-start',20) }}>
-        {/* Support Channels */}
         <div style={{ flex:1 }}>
           <div style={{ ...flex('row','center','flex-start',8), marginBottom:16 }}>
             <div style={{ width:3, height:18, background:C.accent, borderRadius:2 }}/>
             <h2 style={{ margin:0, color:C.textPrimary, fontSize:16, fontWeight:600 }}>Support Channels</h2>
           </div>
           <div style={{ ...flex('row','stretch','flex-start',12), marginBottom:20 }}>
-            {[
-              { icon:'🎫', title:'Open a Ticket', desc:'Response time: < 2 hours' },
-              { icon:'💬', title:'Live Chat', desc:'Direct encrypted link' },
-              { icon:'👥', title:'Community', desc:'Sentinel Global Forum' },
-            ].map(({icon,title,desc},i) => (
-              <div key={i} style={{
-                flex:1, background:C.bgCard, border:`1px solid ${C.border}`,
-                borderRadius:10, padding:16, cursor:'pointer',
-              }}>
+            {[{icon:'🎫',title:'Open a Ticket',desc:'Response time: < 2 hours'},{icon:'💬',title:'Live Chat',desc:'Direct encrypted link'},{icon:'👥',title:'Community',desc:'Sentinel Global Forum'}].map(({icon,title,desc},i) => (
+              <div key={i} style={{ flex:1, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:10, padding:16, cursor:'pointer' }}>
                 <div style={{ fontSize:18, marginBottom:8 }}>{icon}</div>
                 <div style={{ color:C.textPrimary, fontSize:13, fontWeight:500 }}>{title}</div>
                 <div style={{ color:C.textSecondary, fontSize:11, marginTop:4 }}>{desc}</div>
               </div>
             ))}
           </div>
-          <div style={{
-            background:C.bgCard, border:`1px solid ${C.border}`,
-            borderRadius:10, padding:20,
-            ...flex('row','center','space-between',16),
-          }}>
+          <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:10, padding:20, ...flex('row','center','space-between',16) }}>
             <div>
               <div style={{ color:C.textPrimary, fontSize:15, fontWeight:600, marginBottom:4 }}>Still need tactical assistance?</div>
               <div style={{ color:C.textSecondary, fontSize:12 }}>Our high-level security engineers are standing by for live deployment support.</div>
             </div>
-            <button style={{
-              padding:'10px 20px', borderRadius:8, flexShrink:0,
-              background:'transparent', border:`1px solid ${C.border}`,
-              color:C.textPrimary, fontSize:13, fontWeight:500, cursor:'pointer',
-            }}>Connect with Command</button>
+            <button style={{ padding:'10px 20px', borderRadius:8, flexShrink:0, background:'transparent', border:`1px solid ${C.border}`, color:C.textPrimary, fontSize:13, fontWeight:500, cursor:'pointer' }}>Connect with Command</button>
           </div>
         </div>
 
-        {/* System Status */}
         <div style={{ width:260, flexShrink:0 }}>
           <div style={{ ...flex('row','center','flex-start',8), marginBottom:16 }}>
             <div style={{ width:3, height:18, background:C.accent, borderRadius:2 }}/>
             <h2 style={{ margin:0, color:C.textPrimary, fontSize:16, fontWeight:600 }}>System Status</h2>
           </div>
           <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:10, padding:16 }}>
-            <div style={{
-              ...flex('row','center','space-between',0),
-              padding:'8px 12px', borderRadius:8,
-              background:C.bg, marginBottom:16,
-            }}>
+            <div style={{ ...flex('row','center','space-between',0), padding:'8px 12px', borderRadius:8, background:C.bg, marginBottom:16 }}>
               <div style={{ ...flex('row','center','flex-start',8) }}>
                 <span style={{ width:8,height:8,borderRadius:'50%',background:C.green,display:'inline-block' }}/>
                 <span style={{ color:C.textPrimary, fontSize:13 }}>Global Nodes</span>
@@ -1152,9 +1094,9 @@ function SupportPage() {
             </div>
             <div style={{ color:C.textMuted, fontSize:10, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Recent Updates</div>
             {[
-              { title:'Vulnerability Database v4.2', time:'2h ago', desc:'New signatures for quantum-resistant encryption bypass attempts have been added.' },
-              { title:'Scheduled Maintenance', time:'1d ago', desc:'APAC Regional Nodes will undergo telemetry optimization on Friday.' },
-              { title:'Sentinel Core Patch 8.0', time:'3d ago', desc:'Major upgrade to the neural processing engine for predictive threat detection.' },
+              {title:'Vulnerability Database v4.2',time:'2h ago',desc:'New signatures for quantum-resistant encryption bypass attempts have been added.'},
+              {title:'Scheduled Maintenance',time:'1d ago',desc:'APAC Regional Nodes underwent telemetry optimization successfully.'},
+              {title:'Sentinel Core Patch 8.0',time:'3d ago',desc:'Major upgrade to the neural processing engine for predictive threat detection.'},
             ].map(({title,time,desc},i) => (
               <div key={i} style={{ marginBottom:12, paddingBottom:12, borderBottom: i<2 ? `1px solid ${C.border}` : 'none' }}>
                 <div style={{ ...flex('row','center','space-between',0), marginBottom:3 }}>
@@ -1164,12 +1106,7 @@ function SupportPage() {
                 <div style={{ color:C.textSecondary, fontSize:11, lineHeight:1.4 }}>{desc}</div>
               </div>
             ))}
-            <button style={{
-              width:'100%', padding:'8px 0', borderRadius:8, marginTop:4,
-              background:'transparent', border:`1px solid ${C.border}`,
-              color:C.textSecondary, fontSize:11, fontWeight:600, cursor:'pointer',
-              letterSpacing:'0.04em',
-            }}>FULL STATUS HISTORY</button>
+            <button style={{ width:'100%', padding:'8px 0', borderRadius:8, marginTop:4, background:'transparent', border:`1px solid ${C.border}`, color:C.textSecondary, fontSize:11, fontWeight:600, cursor:'pointer', letterSpacing:'0.04em' }}>FULL STATUS HISTORY</button>
           </div>
         </div>
       </div>
@@ -1193,13 +1130,11 @@ function SettingsPage() {
 function LogsPage({ results }) {
   const logs = results ? results.findings.map((f,i) => ({
     time: new Date(Date.now() - i * 30000).toLocaleTimeString(),
-    level: f.severity,
-    msg: f.title,
-    surface: f.surface,
+    level: f.severity, msg: f.title, surface: f.surface,
   })) : [
     { time:'14:02:09', level:'CRITICAL', msg:'Log4j variant detected in dependency tree', surface:'Application' },
-    { time:'14:01:55', level:'HIGH',     msg:'Outdated npm package with known CVE', surface:'Codebase' },
-    { time:'13:58:11', level:'PASS',     msg:'SSL certificate valid – 62 days remaining', surface:'Website' },
+    { time:'14:01:55', level:'HIGH',     msg:'Outdated npm package with known CVE',        surface:'Codebase'    },
+    { time:'13:58:11', level:'PASS',     msg:'SSL certificate valid – 62 days remaining',  surface:'Website'     },
   ];
 
   const sc = (sev) => severityConfig[sev] || severityConfig.INFO;
@@ -1221,11 +1156,7 @@ function LogsPage({ results }) {
               <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
                 <td style={{ padding:'10px 16px', color:C.textMuted, fontSize:12, whiteSpace:'nowrap' }}>{l.time}</td>
                 <td style={{ padding:'10px 16px' }}>
-                  <span style={{
-                    padding:'2px 8px', borderRadius:4,
-                    background:sc(l.level).bg, color:sc(l.level).color,
-                    fontSize:10, fontWeight:700,
-                  }}>{l.level}</span>
+                  <span style={{ padding:'2px 8px', borderRadius:4, background:sc(l.level).bg, color:sc(l.level).color, fontSize:10, fontWeight:700 }}>{l.level}</span>
                 </td>
                 <td style={{ padding:'10px 16px', color:C.textSecondary, fontSize:12 }}>{l.surface}</td>
                 <td style={{ padding:'10px 16px', color:C.textPrimary, fontSize:12 }}>{l.msg}</td>
@@ -1247,15 +1178,12 @@ export default function App() {
   const [error, setError] = useState('');
 
   if (!user) {
-    return <AuthPage onAuth={(u) => setUser(u)} />;
+      return <AuthPage onAuth={(u) => setUser(u)} />;
   }
 
   async function handleScan(websiteUrl, appUrl, repoUrl) {
     if (websiteUrl === null) { setResults(null); return; }
-    if (!websiteUrl && !appUrl && !repoUrl) {
-      setError('Please enter at least one URL to scan.');
-      return;
-    }
+    if (!websiteUrl && !appUrl && !repoUrl) { setError('Please enter at least one URL to scan.'); return; }
     setError('');
     setLoading(true);
     try {
@@ -1274,6 +1202,7 @@ export default function App() {
       case 'dashboard': return <DashboardPage results={results} setPage={setPage} />;
       case 'scans':     return <ScansPage results={results} onNewScan={handleScan} loading={loading} error={error} />;
       case 'logs':      return <LogsPage results={results} />;
+      case 'terminal':  return <ThreatTerminalPage />;
       case 'support':   return <SupportPage />;
       case 'settings':  return <SettingsPage />;
       default:          return <DashboardPage results={results} setPage={setPage} />;
@@ -1291,6 +1220,7 @@ export default function App() {
         ::-webkit-scrollbar-thumb { background: ${C.border}; border-radius: 3px; }
         input::placeholder { color: ${C.textMuted}; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
       `}</style>
       <div style={{ display:'flex', minHeight:'100vh', background: C.bg }}>
         <Sidebar activePage={page} setPage={setPage} results={results} />
