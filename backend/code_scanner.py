@@ -35,6 +35,9 @@ def scan_codebase(repo_url):
     if GITHUB_TOKEN:
         headers["Authorization"] = f"token {GITHUB_TOKEN}"
 
+    repo_info = requests.get(f"https://api.github.com/repos/{owner}/{repo}", headers=headers).json()
+    default_branch = repo_info.get("default_branch", "main")
+
     # --- CHECK 1: Does .gitignore exist? ---
     try:
         r = requests.get(
@@ -57,7 +60,12 @@ def scan_codebase(repo_url):
                 "fix": ""
             })
     except:
-        pass
+        findings.append({
+        "severity": "INFO",
+        "surface": "System",
+        "title": "Error occurred while checking for .gitignore",
+        "fix": "Check API connectivity or input data"
+    })
 
     # --- CHECK 2: Check package.json for vulnerable dependencies ---
     try:
@@ -125,15 +133,67 @@ def scan_codebase(repo_url):
             ]
 
             secrets_found = []
-            for file in code_files[:20]:  # limit to 20 files
+            priority_keywords = [".env", "config", "settings", "secrets"]
+
+            priority_files = []
+            normal_files = []
+
+            for f in code_files:
+                if any(keyword in f["path"].lower() for keyword in priority_keywords):
+                    priority_files.append(f)
+                else:
+                    normal_files.append(f)
+            
+            files_to_scan = priority_files + normal_files
+            
+            for file in files_to_scan[:20]:  # limit to 20 files
                 try:
-                    raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/HEAD/{file['path']}"
-                    content = requests.get(raw_url, timeout=3).text
-                    for pattern, secret_name in secret_patterns:
-                        if re.search(pattern, content, re.IGNORECASE):
-                            secrets_found.append(f"{secret_name} in {file['path']}")
-                except:
-                    pass
+                    raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{default_branch}/{file['path']}"
+                    
+                    response = requests.get(raw_url, timeout=5)
+
+                    if response.status_code != 200:
+                        findings.append({
+                            "severity": "INFO",
+                            "surface": "Codebase",
+                            "title": f"Failed to fetch file: {file['path']}",
+                            "fix": f"HTTP {response.status_code} returned. Check repository access or rate limits."
+                        })
+                    else:
+                        content = response.text
+
+                        for pattern, secret_name in secret_patterns:
+                            match = re.search(pattern, content, re.IGNORECASE)
+                            if match:
+                                secrets_found.append({
+                                    "type": secret_name,
+                                    "file": file['path'],
+                                    "snippet": match.group(0)[:50]  # show part of the secret safely
+                                })
+
+                except requests.exceptions.Timeout:
+                    findings.append({
+                        "severity": "INFO",
+                        "surface": "System",
+                        "title": f"Timeout while scanning file: {file['path']}",
+                        "fix": "Increase timeout or optimize scanning"
+                    })
+
+                except requests.exceptions.RequestException as e:
+                    findings.append({
+                        "severity": "INFO",
+                        "surface": "System",
+                        "title": f"Request error for file {file['path']}: {str(e)}",
+                        "fix": "Check network or API limits"
+                    })
+
+                except Exception as e:
+                    findings.append({
+                        "severity": "LOW",
+                        "surface": "System",
+                        "title": f"Unexpected error scanning {file['path']}: {str(e)}",
+                        "fix": "Investigate edge case"
+                    })
 
             if secrets_found:
                 for secret in secrets_found[:3]:  # report max 3
