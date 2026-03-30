@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { runScan } from './api';
 import { generatePDFReport } from './generateReport';
+import AuthPage from './AuthPage';
 
 // ── colour tokens ──────────────────────────────────────────────
 const C = {
@@ -1239,10 +1240,15 @@ function LogsPage({ results }) {
 
 // ── Root App ───────────────────────────────────────────────────
 export default function App() {
+  const [user, setUser] = useState(null);
   const [page, setPage] = useState('dashboard');
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  if (!user) {
+    return <AuthPage onAuth={(u) => setUser(u)} />;
+  }
 
   async function handleScan(websiteUrl, appUrl, repoUrl) {
     if (websiteUrl === null) { setResults(null); return; }
