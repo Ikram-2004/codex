@@ -17,37 +17,39 @@ def calculate_final_score(website_score, app_score, code_score):
             "score": 0,
             "grade": "F",
             "message": "No valid URLs provided",
-            "color": "red"
+            "color": "red",
+            "surfaces_scanned": 0
         }
 
-    # Normalize so weights always add up to 1
     total_weight = sum(weights)
     final = round(sum(scores) / total_weight)
+    scanned_surfaces = len(scores)
 
-    if final >= 85:
-        grade = "A"
-        message = "Well secured — keep monitoring regularly"
-        color = "green"
-    elif final >= 70:
-        grade = "B"
-        message = "Good posture — a few improvements needed"
-        color = "teal"
+    if final >= 90:
+        grade, color = "A", "green"
+        message = "Excellent security posture — industry best practice"
+    elif final >= 75:
+        grade, color = "B", "teal"
+        message = "Good security — a few improvements recommended"
     elif final >= 55:
-        grade = "C"
-        message = "Moderate risk — take action soon"
-        color = "amber"
-    elif final >= 40:
-        grade = "D"
-        message = "High risk — fix critical issues urgently"
-        color = "orange"
+        grade, color = "C", "amber"
+        message = "Average security — several issues need attention"
+    elif final >= 35:
+        grade, color = "D", "orange"
+        message = "Poor security — fix HIGH issues urgently"
     else:
-        grade = "F"
-        message = "Critical vulnerabilities found — act now"
-        color = "red"
+        grade, color = "F", "red"
+        message = "Critical vulnerabilities found — act immediately"
+
+    if scanned_surfaces == 1:
+        message += " (website only — add app & repo URLs for full picture)"
+    elif scanned_surfaces == 2:
+        message += " (2 of 3 surfaces scanned)"
 
     return {
         "score": final,
         "grade": grade,
         "message": message,
-        "color": color
+        "color": color,
+        "surfaces_scanned": scanned_surfaces
     }
