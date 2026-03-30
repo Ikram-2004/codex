@@ -352,31 +352,45 @@ function AIAssistant({ results }) {
         : "Good morning, Sentinel. I'm your AI security advisor. Run a scan to get started and I'll analyze your results." },
   ]);
   const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const bottomRef = useRef(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  function send() {
-    if (!input.trim()) return;
+  async function send() {
+    if (!input.trim() || isLoading) return;
     const q = input.trim();
     setInput('');
-    setMessages(m => [...m, { from: 'user', text: q }]);
+    const updatedMessages = [...messages, { from: 'user', text: q }];
+    setMessages(updatedMessages);
+    setIsLoading(true);
 
-    // Simulate response
-    setTimeout(() => {
-      let resp = "I recommend reviewing your security posture regularly. If you've run a scan, I can provide specific advice on the findings.";
-      if (q.toLowerCase().includes('patch') || q.toLowerCase().includes('fix'))
-        resp = "I recommend immediate container isolation. I can generate a temporary WAF rule for you now. Would you like to proceed?";
-      else if (q.toLowerCase().includes('ssl'))
-        resp = "Your SSL certificate appears valid. Renew it before the expiry date using Let's Encrypt — it's free and automatic.";
-      else if (q.toLowerCase().includes('header'))
-        resp = "Missing security headers can expose you to XSS and clickjacking attacks. Add Content-Security-Policy and X-Frame-Options to your server config.";
-      else if (results && q.toLowerCase().includes('score'))
-        resp = `Your current score is ${results.final.score}/100 (${results.final.grade}). ${results.findings.filter(f=>f.severity!=='PASS').length} issues need attention.`;
-      setMessages(m => [...m, { from: 'bot', text: resp }]);
-    }, 800);
+    try {
+      const res = await fetch('http://localhost:8000/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: updatedMessages.map(m => ({
+            role: m.from === 'bot' ? 'assistant' : 'user',
+            content: m.text,
+          })),
+          scan_context: results ? {
+            score: results.final.score,
+            grade: results.final.grade,
+            issues: results.findings.filter(f => f.severity !== 'PASS').map(f => f.title),
+            passes: results.findings.filter(f => f.severity === 'PASS').map(f => f.title),
+          } : null,
+        }),
+      });
+      const data = await res.json();
+      setMessages(m => [...m, { from: 'bot', text: data.response }]);
+    } catch (e) {
+      setMessages(m => [...m, { from: 'bot', text: 'Connection error. Is the backend running on port 8000?' }]);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   const quickActions = ['Patch Log4j', 'Isolate IP', 'Export Logs'];
@@ -401,8 +415,10 @@ function AIAssistant({ results }) {
           <div>
             <div style={{ color:C.textPrimary, fontSize:12, fontWeight:600 }}>PulseAssistant</div>
             <div style={{ ...flex('row','center','flex-start',4) }}>
-              <span style={{ width:6,height:6,borderRadius:'50%',background:C.green,display:'inline-block' }}/>
-              <span style={{ color:C.textSecondary, fontSize:10, textTransform:'uppercase', letterSpacing:'0.05em' }}>AI Security Advisor</span>
+              <span style={{ width:6,height:6,borderRadius:'50%',background:isLoading ? C.amber : C.green,display:'inline-block' }}/>
+              <span style={{ color:C.textSecondary, fontSize:10, textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                {isLoading ? 'Thinking...' : 'AI Security Advisor'}
+              </span>
             </div>
           </div>
         </div>
@@ -432,17 +448,35 @@ function AIAssistant({ results }) {
             </div>
           </div>
         ))}
+        {isLoading && (
+          <div style={{ display:'flex', justifyContent:'flex-start' }}>
+            <div style={{
+              width:22, height:22, borderRadius:6, flexShrink:0,
+              background:`linear-gradient(135deg,${C.accent},${C.pink})`,
+              display:'flex',alignItems:'center',justifyContent:'center',
+              color:'#fff', fontSize:10, marginRight:8, marginTop:2,
+            }}>
+              <Icon.Bot />
+            </div>
+            <div style={{
+              padding:'8px 10px', borderRadius:'4px 12px 12px 12px',
+              background: C.bg, border:`1px solid ${C.border}`,
+              color: C.textSecondary, fontSize:12,
+            }}>
+              ···
+            </div>
+          </div>
+        )}
         <div ref={bottomRef}/>
       </div>
 
       {/* Quick Actions */}
       <div style={{ padding:'8px 14px 0', ...flex('row','center','flex-start',6), flexWrap:'wrap' }}>
         {quickActions.map(a => (
-          <button key={a} onClick={() => { setInput(a); }} style={{
+          <button key={a} onClick={() => setInput(a)} style={{
             padding:'4px 10px', borderRadius:20,
             background: C.bg, border:`1px solid ${C.border}`,
             color: C.textSecondary, fontSize:10, cursor:'pointer',
-            transition:'all 0.15s',
           }}>
             {a}
           </button>
@@ -456,15 +490,18 @@ function AIAssistant({ results }) {
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key==='Enter' && send()}
           placeholder="Ask for advice..."
+          disabled={isLoading}
           style={{
             flex:1, background: C.bg, border:`1px solid ${C.border}`,
             borderRadius:8, padding:'8px 10px', color: C.textPrimary,
             fontSize:12, outline:'none',
+            opacity: isLoading ? 0.6 : 1,
           }}
         />
-        <button onClick={send} style={{
+        <button onClick={send} disabled={isLoading} style={{
           width:30,height:30,borderRadius:8,flexShrink:0,
-          background:C.accent, border:'none', color:'#fff', cursor:'pointer',
+          background: isLoading ? C.textMuted : C.accent,
+          border:'none', color:'#fff', cursor: isLoading ? 'not-allowed' : 'pointer',
           display:'flex',alignItems:'center',justifyContent:'center',
         }}>
           <Icon.Send />
