@@ -4,32 +4,34 @@ import { generatePDFReport } from './generateReport';
 import SupportPage from './SupportPage';
 import AuthPage from './AuthPage';
 import QuestionnairePage from './QuestionnairePage';
+import LandingPage from './LandingPage';
 
 
 // ── colour tokens ──────────────────────────────────────────────
+export const darkColors = {
+  bg: '#0f1117', bgCard: '#161b27', bgCardHover: '#1a2033', sidebar: '#11151e',
+  border: '#1e2535', borderLight: '#252d40', accent: '#6c5ce7', accentHover: '#7d6ff0',
+  accentSoft: 'rgba(108,92,231,0.15)', pink: '#e84393', pinkSoft: 'rgba(232,67,147,0.12)',
+  cyan: '#00cec9', cyanSoft: 'rgba(0,206,201,0.12)', green: '#00b894', greenSoft: 'rgba(0,184,148,0.12)',
+  amber: '#fdcb6e', amberSoft: 'rgba(253,203,110,0.12)', red: '#d63031', redSoft: 'rgba(214,48,49,0.12)',
+  textPrimary: '#f0f1f5', textSecondary: '#8892a4', textMuted: '#4a5568', termBg: '#0a0e1a',
+};
+export const lightColors = {
+  bg: '#f8f9fa', bgCard: '#ffffff', bgCardHover: '#f1f3f5', sidebar: '#ffffff',
+  border: '#e9ecef', borderLight: '#dee2e6', accent: '#6c5ce7', accentHover: '#5a4bcf',
+  accentSoft: 'rgba(108,92,231,0.1)', pink: '#e84393', pinkSoft: 'rgba(232,67,147,0.08)',
+  cyan: '#00cec9', cyanSoft: 'rgba(0,206,201,0.08)', green: '#00b894', greenSoft: 'rgba(0,184,148,0.08)',
+  amber: '#f39c12', amberSoft: 'rgba(243,156,18,0.08)', red: '#e74c3c', redSoft: 'rgba(231,76,60,0.08)',
+  textPrimary: '#212529', textSecondary: '#495057', textMuted: '#868e96', termBg: '#f1f3f5',
+};
+
 const C = {
-  bg: '#0f1117',
-  bgCard: '#161b27',
-  bgCardHover: '#1a2033',
-  sidebar: '#11151e',
-  border: '#1e2535',
-  borderLight: '#252d40',
-  accent: '#6c5ce7',
-  accentHover: '#7d6ff0',
-  accentSoft: 'rgba(108,92,231,0.15)',
-  pink: '#e84393',
-  pinkSoft: 'rgba(232,67,147,0.12)',
-  cyan: '#00cec9',
-  cyanSoft: 'rgba(0,206,201,0.12)',
-  green: '#00b894',
-  greenSoft: 'rgba(0,184,148,0.12)',
-  amber: '#fdcb6e',
-  amberSoft: 'rgba(253,203,110,0.12)',
-  red: '#d63031',
-  redSoft: 'rgba(214,48,49,0.12)',
-  textPrimary: '#f0f1f5',
-  textSecondary: '#8892a4',
-  textMuted: '#4a5568',
+  bg: 'var(--bg)', bgCard: 'var(--bgCard)', bgCardHover: 'var(--bgCardHover)', sidebar: 'var(--sidebar)',
+  border: 'var(--border)', borderLight: 'var(--borderLight)', accent: 'var(--accent)', accentHover: 'var(--accentHover)',
+  accentSoft: 'var(--accentSoft)', pink: 'var(--pink)', pinkSoft: 'var(--pinkSoft)',
+  cyan: 'var(--cyan)', cyanSoft: 'var(--cyanSoft)', green: 'var(--green)', greenSoft: 'var(--greenSoft)',
+  amber: 'var(--amber)', amberSoft: 'var(--amberSoft)', red: 'var(--red)', redSoft: 'var(--redSoft)',
+  textPrimary: 'var(--textPrimary)', textSecondary: 'var(--textSecondary)', textMuted: 'var(--textMuted)',
 };
 
 const severityConfig = {
@@ -156,6 +158,29 @@ const Icon = {
       <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
     </svg>
   ),
+  Moon: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+    </svg>
+  ),
+  Sun: () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+      <line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/>
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+  ),
+  Python: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+    </svg>
+  ),
+  Zap: () => (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    </svg>
+  ),
 };
 
 // ── Sidebar ────────────────────────────────────────────────────
@@ -262,7 +287,7 @@ function Sidebar({ activePage, setPage, results }) {
 }
 
 // ── Top Nav Bar ────────────────────────────────────────────────
-function TopNav({ activePage, setPage, results }) {
+function TopNav({ activePage, setPage, results, isDark, setIsDark }) {
   const tabs = [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'scans',     label: 'Scans'     },
@@ -301,6 +326,9 @@ function TopNav({ activePage, setPage, results }) {
           <Icon.Search />
           <span>Global search...</span>
         </div>
+        <button onClick={() => setIsDark(!isDark)} style={{ background:'none', border:'none', color: C.textSecondary, cursor:'pointer', padding:4 }}>
+          {isDark ? <Icon.Sun /> : <Icon.Moon />}
+        </button>
         <button style={{ background:'none', border:'none', color: C.textSecondary, cursor:'pointer', padding:4 }}>
           <Icon.Bell />
         </button>
@@ -573,6 +601,44 @@ function DashboardPage({ results, setPage, userPreferences }) {
         </div>
 
         <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:20 }}>
+            <div style={{ color:C.textSecondary, fontSize:11, fontWeight:600, letterSpacing:'0.08em', textTransform:'uppercase' }}>Your Score vs Global Distribution</div>
+          </div>
+          <div style={{ position:'relative', height:120, display:'flex', alignItems:'flex-end', gap:12, paddingBottom:24, borderBottom:`1px solid ${C.borderLight}` }}>
+            {[
+              { label: '0-20',   pct: 10, color: '#e74c3c' },
+              { label: '21-40',  pct: 25, color: '#f39c12' },
+              { label: '41-60',  pct: 50, color: '#6c5ce7' },
+              { label: '61-80',  pct: 40, color: '#00b894' },
+              { label: '81-100', pct: 15, color: '#e84393' },
+            ].map((bar, i) => (
+              <div key={i} style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', height:'100%', justifyContent:'flex-end', position:'relative' }}>
+                <div style={{ 
+                  width: '100%', maxWidth:40, height: `${bar.pct}%`, 
+                  background: bar.color, opacity:0.15, borderRadius:'4px 4px 0 0'
+                }} />
+                <div style={{ position:'absolute', bottom:-20, color:C.textMuted, fontSize:11 }}>{bar.label}</div>
+              </div>
+            ))}
+            {(() => {
+              const score = results ? results.final.score : 74;
+              const leftPct = Math.max(5, Math.min(95, score));
+              return (
+                <div style={{
+                  position:'absolute', bottom:24, left: `${leftPct}%`, transform:'translateX(-50%)',
+                  display:'flex', flexDirection:'column', alignItems:'center', zIndex:10
+                }}>
+                  <div style={{ background:C.accent, color:'#fff', padding:'2px 8px', borderRadius:4, fontSize:10, fontWeight:700, marginBottom:4, whiteSpace:'nowrap', boxShadow:'0 2px 8px rgba(0,0,0,0.2)' }}>YOU: {score}</div>
+                  <div style={{ width:2, height:100, background:C.accent, position:'relative' }}>
+                    <div style={{ width:8, height:8, borderRadius:'50%', background:C.accent, position:'absolute', bottom:-4, left:-3 }}/>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+
+        <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:12, padding:20 }}>
           <div style={{ ...flex('row','center','space-between',0), marginBottom:16 }}>
             <div style={{ color:C.textPrimary, fontSize:14, fontWeight:600 }}>Recent Scans</div>
             <button onClick={() => setPage('scans')} style={{ background:'none', border:'none', color:C.accent, fontSize:12, fontWeight:600, cursor:'pointer' }}>VIEW ALL</button>
@@ -614,8 +680,8 @@ function ScanInputPage({ onScan, loading, error }) {
   const [scannerType, setScannerType] = useState('python');
 
   const scannerOptions = [
-    { id: 'python', label: 'Python Scanner', icon: '🐍', desc: 'Fast, lightweight custom checks' },
-    { id: 'zap', label: 'OWASP ZAP', icon: '🔬', desc: 'Deep scan via ZAP API' },
+    { id: 'python', label: 'Python Scanner', icon: <Icon.Python />, desc: 'Fast, lightweight custom checks' },
+    { id: 'zap', label: 'OWASP ZAP', icon: <Icon.Zap />, desc: 'Deep scan via ZAP API' },
   ];
 
   return (
@@ -716,7 +782,7 @@ function ScanInputPage({ onScan, loading, error }) {
             </span>
           ) : (
             <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
-              {scannerType === 'zap' ? '🔬' : '🐍'} Run Security Scan
+              {scannerType === 'zap' ? <Icon.Zap /> : <Icon.Python />} Run Security Scan
             </span>
           )}
         </button>
@@ -1131,12 +1197,21 @@ function LogsPage({ results }) {
 
 // ── Root App ───────────────────────────────────────────────────
 export default function App() {
+  const [hasVisitedLanding, setHasVisitedLanding] = useState(false);
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('securepulse_mode');
+    return saved !== null ? saved === 'dark' : true;
+  });
   const [user, setUser] = useState(null);
   const [userPreferences, setUserPreferences] = useState(null);
   const [page, setPage] = useState('dashboard');
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    localStorage.setItem('securepulse_mode', isDark ? 'dark' : 'light');
+  }, [isDark]);
 
   // Restore preferences from sessionStorage on mount
   useEffect(() => {
@@ -1145,6 +1220,11 @@ export default function App() {
       try { setUserPreferences(JSON.parse(saved)); } catch {}
     }
   }, []);
+
+  // Step 0: Landing page
+  if (!hasVisitedLanding) {
+    return <LandingPage onGetStarted={() => setHasVisitedLanding(true)} />;
+  }
 
   // Step 1: Auth gate
   if (!user) {
@@ -1192,11 +1272,16 @@ export default function App() {
     }
   };
 
+  const activeColors = isDark ? darkColors : lightColors;
+
   return (
     <>
       <style>{`
+        :root {
+          ${Object.entries(activeColors).map(([k, v]) => `--${k}: ${v};`).join('\n          ')}
+        }
         * { box-sizing: border-box; }
-        body { margin: 0; background: ${C.bg}; font-family: 'SF Pro Display', -apple-system, 'Segoe UI', sans-serif; }
+        body { margin: 0; background: var(--bg); font-family: 'SF Pro Display', -apple-system, 'Segoe UI', sans-serif; }
         #root { min-height: 100vh; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -1208,7 +1293,7 @@ export default function App() {
       <div style={{ display:'flex', minHeight:'100vh', background: C.bg }}>
         <Sidebar activePage={page} setPage={setPage} results={results} />
         <div style={{ flex:1, display:'flex', flexDirection:'column', minWidth:0, minHeight:'100vh' }}>
-          <TopNav activePage={page} setPage={setPage} results={results} />
+          <TopNav activePage={page} setPage={setPage} results={results} isDark={isDark} setIsDark={setIsDark} />
           <main style={{ flex:1, display:'flex', flexDirection:'column', overflow:'auto' }}>
             {renderPage()}
           </main>
