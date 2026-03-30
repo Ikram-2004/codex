@@ -8,6 +8,11 @@ from app_scanner import scan_app
 from code_scanner import scan_codebase
 from scorer import calculate_final_score
 from chat import get_chat_response
+from support import (
+    KNOWLEDGE_DOMAINS,
+    search_knowledge_base,
+    get_live_chat_response
+)
 import asyncio
 import json
 import time
@@ -33,7 +38,7 @@ class ScanRequest(BaseModel):
     repo_url: str = ""
 
 class ChatMessage(BaseModel):
-    role: str  # 'user' or 'assistant'
+    role: str
     content: str
 
 class ChatRequest(BaseModel):
@@ -47,6 +52,19 @@ class TicketRequest(BaseModel):
     priority: str = "medium"
     description: str
     scan_id: Optional[str] = None
+
+class SearchRequest(BaseModel):
+    query: str
+
+class LiveChatRequest(BaseModel):
+    messages: List[ChatMessage]
+
+class CommandRequest(BaseModel):
+    name: str
+    email: str
+    company: str = ""
+    message: str
+    urgency: str = "medium"
 
 # ── Helpers ────────────────────────────────────────────────────
 
@@ -65,7 +83,6 @@ def is_valid_url(url: str) -> bool:
 
 
 def classify_request(method: str, path: str, ua: str, status: int) -> dict:
-    """Classify incoming request severity and type."""
     ua_lower = ua.lower()
     path_lower = path.lower()
 
@@ -107,7 +124,6 @@ async def threat_logger(request, call_next):
     response = await call_next(request)
     duration_ms = round((time.time() - start) * 1000)
 
-    # Skip /events itself to avoid feedback loop
     if request.url.path == "/events":
         return response
 
@@ -147,7 +163,6 @@ def root():
 
 @app.get("/events")
 async def sse_events():
-    """Server-Sent Events stream for live threat terminal."""
     async def generate():
         while True:
             try:
@@ -215,7 +230,6 @@ def run_scan(request: ScanRequest):
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    """PulseAssistant - Groq-powered security advisor chat endpoint."""
     try:
         messages = [{"role": m.role, "content": m.content} for m in request.messages]
         response_text = await get_chat_response(messages, request.scan_context)
@@ -233,6 +247,50 @@ async def chat(request: ChatRequest):
         return {"response": msg, "success": False}
 
 
+# ── Support endpoints ──────────────────────────────────────────
+
+@app.get("/support/knowledge")
+async def get_knowledge_domains():
+    """Return all knowledge domains and their articles (without full content)."""
+    domains_summary = []
+    for domain in KNOWLEDGE_DOMAINS:
+        domains_summary.append({
+            "id": domain["id"],
+            "icon": domain["icon"],
+            "color": domain["color"],
+            "title": domain["title"],
+            "desc": domain["desc"],
+            "articles": [{"title": a["title"]} for a in domain["articles"]]
+        })
+    return {"domains": domains_summary}
+
+
+@app.get("/support/knowledge/{domain_id}/{article_index}")
+async def get_article(domain_id: str, article_index: int):
+    """Return the full content of a specific article."""
+    for domain in KNOWLEDGE_DOMAINS:
+        if domain["id"] == domain_id:
+            if 0 <= article_index < len(domain["articles"]):
+                article = domain["articles"][article_index]
+                return {
+                    "domain": domain["title"],
+                    "domain_color": domain["color"],
+                    "title": article["title"],
+                    "content": article["content"]
+                }
+    return {"error": "Article not found"}, 404
+
+
+@app.post("/support/search")
+async def search_support(request: SearchRequest):
+    """AI-powered search through knowledge base."""
+    try:
+        result = await search_knowledge_base(request.query)
+        return {"success": True, **result}
+    except Exception as e:
+        return {"success": False, "answer": f"Search error: {str(e)}", "articles": []}
+
+
 @app.post("/ticket")
 async def create_ticket(request: TicketRequest):
     """Create a support ticket."""
@@ -243,6 +301,35 @@ async def create_ticket(request: TicketRequest):
         "message": f"Ticket {ticket_id} created successfully. You'll receive a response at {request.email} within 2 hours.",
         "priority": request.priority,
         "estimated_response": "< 2 hours" if request.priority in ["high", "critical"] else "< 24 hours"
+    }
+
+
+@app.post("/support/livechat")
+async def live_chat(request: LiveChatRequest):
+    """AI-powered live support chat."""
+    try:
+        messages = [{"role": m.role, "content": m.content} for m in request.messages]
+        response = await get_live_chat_response(messages)
+        return {"success": True, "response": response}
+    except Exception as e:
+        return {"success": False, "response": f"Chat error: {str(e)}"}
+
+
+@app.post("/support/command")
+async def connect_with_command(request: CommandRequest):
+    """Submit a request to connect with the security command team."""
+    request_id = f"CMD-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    urgency_times = {
+        "low": "within 48 hours",
+        "medium": "within 24 hours",
+        "high": "within 4 hours",
+        "critical": "within 1 hour"
+    }
+    return {
+        "success": True,
+        "request_id": request_id,
+        "message": f"Your request {request_id} has been routed to our security command team. A senior engineer will contact {request.email} {urgency_times.get(request.urgency, 'within 24 hours')}.",
+        "estimated_response": urgency_times.get(request.urgency, "within 24 hours")
     }
 
 

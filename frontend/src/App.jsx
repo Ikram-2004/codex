@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { runScan } from './api';
 import { generatePDFReport } from './generateReport';
+import SupportPage from './SupportPage';
 import AuthPage from './AuthPage';
 
 
@@ -888,7 +889,6 @@ function ThreatTerminalPage() {
       </div>
 
       <div style={{ background:termBg, borderRadius:12, border:`1px solid ${termBorder}`, overflow:'hidden' }}>
-        {/* Title bar */}
         <div style={{ background:'#11151e', borderBottom:`1px solid ${termBorder}`, padding:'10px 16px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
           <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             <div style={{ display:'flex', gap:6 }}>
@@ -902,7 +902,6 @@ function ThreatTerminalPage() {
           </div>
         </div>
 
-        {/* Tabs */}
         <div style={{ display:'flex', borderBottom:`1px solid ${termBorder}`, background:termBg }}>
           {[['feed','EVENT FEED'],['geo','IP INTEL'],['vectors','ATTACK VECTORS']].map(([id,label]) => (
             <button key={id} onClick={() => setTab(id)} style={{
@@ -914,7 +913,6 @@ function ThreatTerminalPage() {
           ))}
         </div>
 
-        {/* Feed */}
         {tab === 'feed' && (
           <div style={{ height:340, overflowY:'auto', padding:'8px 0' }}>
             {events.length === 0 ? (
@@ -937,7 +935,6 @@ function ThreatTerminalPage() {
           </div>
         )}
 
-        {/* IP Intel */}
         {tab === 'geo' && (
           <div style={{ padding:16, height:340, overflowY:'auto' }}>
             <div style={{ color:termMuted, fontSize:10, fontFamily:mono, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>
@@ -957,7 +954,6 @@ function ThreatTerminalPage() {
           </div>
         )}
 
-        {/* Attack Vectors */}
         {tab === 'vectors' && (
           <div style={{ padding:16, height:340, overflowY:'auto' }}>
             <div style={{ color:termMuted, fontSize:10, fontFamily:mono, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:12 }}>
@@ -977,7 +973,6 @@ function ThreatTerminalPage() {
           </div>
         )}
 
-        {/* Stats bar */}
         <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:1, background:termBorder, borderTop:`1px solid ${termBorder}` }}>
           {[
             { val:stats.total,     label:'Events',     color:'#a29bfe' },
@@ -1006,110 +1001,6 @@ function ThreatTerminalPage() {
         @keyframes fadeInRow { from { opacity:0; background:rgba(108,92,231,0.08); } to { opacity:1; background:transparent; } }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
       `}</style>
-    </div>
-  );
-}
-
-// ── Support Page ───────────────────────────────────────────────
-function SupportPage() {
-  const domains = [
-    { icon:'🛡️', color:C.pink,   title:'Account Security',  desc:'Master multi-factor authentication, biometric locks, and session management protocols.', links:['Resetting administrative credentials','Configuring hardware security keys'] },
-    { icon:'⊙',  color:C.accent, title:'Scan Config',        desc:'Fine-tune your perimeter scan frequency and threat detection depth.', links:[] },
-    { icon:'◈',  color:C.cyan,   title:'API Docs',           desc:"Integrate Sentinel's intelligence into your existing infrastructure.", links:[] },
-    { icon:'🪙', color:C.amber,  title:'Billing & Plans',    desc:'Review enterprise tier features and resource allocation.', links:[] },
-    { icon:'⚠️', color:C.red,    title:'Incident Response',  desc:'What to do when a Level 5 breach is detected in your network subnet.', links:['View Protocols →'] },
-  ];
-
-  return (
-    <div style={{ flex:1, overflowY:'auto', padding:32 }}>
-      <div style={{ textAlign:'center', marginBottom:40 }}>
-        <h1 style={{ margin:'0 0 8px', color:C.textPrimary, fontSize:28, fontWeight:700 }}>How can we help you, Sentinel?</h1>
-        <p style={{ margin:'0 0 24px', color:C.textSecondary, fontSize:14 }}>Access the central intelligence repository for all Security Operations.</p>
-        <div style={{ maxWidth:520, margin:'0 auto', ...flex('row','center','flex-start',0), background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:10 }}>
-          <span style={{ padding:'0 14px', color:C.textMuted }}><Icon.Search /></span>
-          <input placeholder="Search for documentation, troubleshooting, or API keys..."
-            style={{ flex:1, background:'transparent', border:'none', outline:'none', color:C.textSecondary, fontSize:13, padding:'12px 0' }}
-          />
-          <button style={{ margin:6, padding:'6px 16px', borderRadius:8, background:C.accent, border:'none', color:'#fff', fontSize:12, fontWeight:600, cursor:'pointer' }}>Analyze</button>
-        </div>
-      </div>
-
-      <div style={{ marginBottom:40 }}>
-        <div style={{ ...flex('row','center','flex-start',8), marginBottom:20 }}>
-          <div style={{ width:3, height:18, background:C.pink, borderRadius:2 }}/>
-          <h2 style={{ margin:0, color:C.textPrimary, fontSize:16, fontWeight:600 }}>Knowledge Domains</h2>
-        </div>
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit, minmax(220px,1fr))', gap:14 }}>
-          {domains.map((d,i) => (
-            <div key={i} style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderTop:`3px solid ${d.color}`, borderRadius:12, padding:20, cursor:'pointer' }}>
-              <div style={{ fontSize:20, marginBottom:10 }}>{d.icon}</div>
-              <div style={{ color:C.textPrimary, fontSize:14, fontWeight:600, marginBottom:6 }}>{d.title}</div>
-              <div style={{ color:C.textSecondary, fontSize:12, lineHeight:1.5, marginBottom:10 }}>{d.desc}</div>
-              {d.links.map((l,j) => (
-                <div key={j} style={{ ...flex('row','center','flex-start',4), color:d.color, fontSize:12, cursor:'pointer' }}>
-                  <Icon.ChevronRight /> {l}
-                </div>
-              ))}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ ...flex('row','flex-start','flex-start',20) }}>
-        <div style={{ flex:1 }}>
-          <div style={{ ...flex('row','center','flex-start',8), marginBottom:16 }}>
-            <div style={{ width:3, height:18, background:C.accent, borderRadius:2 }}/>
-            <h2 style={{ margin:0, color:C.textPrimary, fontSize:16, fontWeight:600 }}>Support Channels</h2>
-          </div>
-          <div style={{ ...flex('row','stretch','flex-start',12), marginBottom:20 }}>
-            {[{icon:'🎫',title:'Open a Ticket',desc:'Response time: < 2 hours'},{icon:'💬',title:'Live Chat',desc:'Direct encrypted link'},{icon:'👥',title:'Community',desc:'Sentinel Global Forum'}].map(({icon,title,desc},i) => (
-              <div key={i} style={{ flex:1, background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:10, padding:16, cursor:'pointer' }}>
-                <div style={{ fontSize:18, marginBottom:8 }}>{icon}</div>
-                <div style={{ color:C.textPrimary, fontSize:13, fontWeight:500 }}>{title}</div>
-                <div style={{ color:C.textSecondary, fontSize:11, marginTop:4 }}>{desc}</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:10, padding:20, ...flex('row','center','space-between',16) }}>
-            <div>
-              <div style={{ color:C.textPrimary, fontSize:15, fontWeight:600, marginBottom:4 }}>Still need tactical assistance?</div>
-              <div style={{ color:C.textSecondary, fontSize:12 }}>Our high-level security engineers are standing by for live deployment support.</div>
-            </div>
-            <button style={{ padding:'10px 20px', borderRadius:8, flexShrink:0, background:'transparent', border:`1px solid ${C.border}`, color:C.textPrimary, fontSize:13, fontWeight:500, cursor:'pointer' }}>Connect with Command</button>
-          </div>
-        </div>
-
-        <div style={{ width:260, flexShrink:0 }}>
-          <div style={{ ...flex('row','center','flex-start',8), marginBottom:16 }}>
-            <div style={{ width:3, height:18, background:C.accent, borderRadius:2 }}/>
-            <h2 style={{ margin:0, color:C.textPrimary, fontSize:16, fontWeight:600 }}>System Status</h2>
-          </div>
-          <div style={{ background:C.bgCard, border:`1px solid ${C.border}`, borderRadius:10, padding:16 }}>
-            <div style={{ ...flex('row','center','space-between',0), padding:'8px 12px', borderRadius:8, background:C.bg, marginBottom:16 }}>
-              <div style={{ ...flex('row','center','flex-start',8) }}>
-                <span style={{ width:8,height:8,borderRadius:'50%',background:C.green,display:'inline-block' }}/>
-                <span style={{ color:C.textPrimary, fontSize:13 }}>Global Nodes</span>
-              </div>
-              <span style={{ padding:'2px 8px', borderRadius:4, background:'rgba(0,184,148,0.15)', color:C.green, fontSize:10, fontWeight:700 }}>OPERATIONAL</span>
-            </div>
-            <div style={{ color:C.textMuted, fontSize:10, textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>Recent Updates</div>
-            {[
-              {title:'Vulnerability Database v4.2',time:'2h ago',desc:'New signatures for quantum-resistant encryption bypass attempts have been added.'},
-              {title:'Scheduled Maintenance',time:'1d ago',desc:'APAC Regional Nodes underwent telemetry optimization successfully.'},
-              {title:'Sentinel Core Patch 8.0',time:'3d ago',desc:'Major upgrade to the neural processing engine for predictive threat detection.'},
-            ].map(({title,time,desc},i) => (
-              <div key={i} style={{ marginBottom:12, paddingBottom:12, borderBottom: i<2 ? `1px solid ${C.border}` : 'none' }}>
-                <div style={{ ...flex('row','center','space-between',0), marginBottom:3 }}>
-                  <span style={{ color:C.textPrimary, fontSize:12, fontWeight:500 }}>{title}</span>
-                  <span style={{ color:C.textMuted, fontSize:10 }}>{time}</span>
-                </div>
-                <div style={{ color:C.textSecondary, fontSize:11, lineHeight:1.4 }}>{desc}</div>
-              </div>
-            ))}
-            <button style={{ width:'100%', padding:'8px 0', borderRadius:8, marginTop:4, background:'transparent', border:`1px solid ${C.border}`, color:C.textSecondary, fontSize:11, fontWeight:600, cursor:'pointer', letterSpacing:'0.04em' }}>FULL STATUS HISTORY</button>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1178,7 +1069,7 @@ export default function App() {
   const [error, setError] = useState('');
 
   if (!user) {
-      return <AuthPage onAuth={(u) => setUser(u)} />;
+    return <AuthPage onAuth={(u) => setUser(u)} />;
   }
 
   async function handleScan(websiteUrl, appUrl, repoUrl) {
@@ -1203,7 +1094,7 @@ export default function App() {
       case 'scans':     return <ScansPage results={results} onNewScan={handleScan} loading={loading} error={error} />;
       case 'logs':      return <LogsPage results={results} />;
       case 'terminal':  return <ThreatTerminalPage />;
-      case 'support':   return <SupportPage />;
+      case 'support':   return <SupportPage />;   // ← uses the imported SupportPage
       case 'settings':  return <SettingsPage />;
       default:          return <DashboardPage results={results} setPage={setPage} />;
     }
