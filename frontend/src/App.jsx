@@ -132,19 +132,32 @@ export default function App() {
             </div>
           </div>
 
+
+
+
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12, marginBottom: 24 }}>
-            {[
-              { label: 'Website', score: results.scores.website },
-              { label: 'Application', score: results.scores.app },
-              { label: 'Codebase', score: results.scores.codebase },
-            ].map(({ label, score }) => (
-              <div key={label} style={{ background: '#F1EFE8', borderRadius: 8, padding: 16, textAlign: 'center' }}>
-                <div style={{ fontSize: 12, color: '#5F5E5A', marginBottom: 4 }}>{label}</div>
-                <div style={{ fontSize: 24, fontWeight: 600 }}>{score}</div>
-                <div style={{ fontSize: 11, color: '#5F5E5A' }}>/ 100</div>
-              </div>
-            ))}
-          </div>
+  {[
+    { label: 'Website', score: results.scores.website },
+    { label: 'Application', score: results.scores.app },
+    { label: 'Codebase', score: results.scores.codebase },
+  ].map(({ label, score }) => (
+    <div key={label} style={{ background: '#F1EFE8', borderRadius: 8, padding: 16, textAlign: 'center' }}>
+      <div style={{ fontSize: 12, color: '#5F5E5A', marginBottom: 4 }}>{label}</div>
+      {score !== null && score !== undefined ? (
+        <>
+          <div style={{ fontSize: 24, fontWeight: 600 }}>{score}</div>
+          <div style={{ fontSize: 11, color: '#5F5E5A' }}>/ 100</div>
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: 14, color: '#B4B2A9', marginTop: 8 }}>Not scanned</div>
+          <div style={{ fontSize: 11, color: '#B4B2A9' }}>—</div>
+        </>
+      )}
+    </div>
+  ))}
+</div>
+
 
           <h2 style={{ fontSize: 16, fontWeight: 500, marginBottom: 12 }}>
             Issues found ({results.findings.filter(f => f.severity !== 'PASS').length})
