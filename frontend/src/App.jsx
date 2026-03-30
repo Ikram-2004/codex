@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { runScan } from './api';
+import { runScan, uploadApk } from './api';
 import { generatePDFReport } from './generateReport';
 import SupportPage from './SupportPage';
 import AuthPage from './AuthPage';
@@ -694,6 +694,7 @@ function ScanInputPage({ onScan, loading, error }) {
   const [websiteUrl, setWebsiteUrl] = useState('');
   const [appUrl, setAppUrl] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
+  const [appFile, setAppFile] = useState(null);
   const [scannerType, setScannerType] = useState('python');
 
   const scannerOptions = [
@@ -710,18 +711,31 @@ function ScanInputPage({ onScan, loading, error }) {
       <div style={{ width:'100%', maxWidth:560, background:'rgba(240,241,245,0.04)', backdropFilter:'blur(10px)', border:`1px solid ${C.border}`, borderRadius:16, padding:32 }}>
         {[
           { label:'Website URL', val:websiteUrl, set:setWebsiteUrl, placeholder:'https://example.com', icon:'Globe' },
-          { label:'App URL (same as website URL if it\'s a web app)', val:appUrl, set:setAppUrl, placeholder:'https://myapp.com', icon:'Lock' },
+          { label:'App URL or Local APK File', val:appUrl, set:setAppUrl, placeholder:'https://myapp.com', icon:'Lock', isApp: true },
           { label:'GitHub Repo URL (optional)', val:repoUrl, set:setRepoUrl, placeholder:'https://github.com/username/reponame', icon:'Code' },
-        ].map(({ label, val, set, placeholder, icon }, i) => {
+        ].map(({ label, val, set, placeholder, icon, isApp }, i) => {
           const IconComp = Icon[icon];
           return (
             <div key={i} style={{ marginBottom: i < 2 ? 20 : 28 }}>
               <label style={{ display:'block', color:C.textSecondary, fontSize:12, marginBottom:8 }}>{label}</label>
               <div style={{ ...flex('row','center','flex-start',0), background:'rgba(255,255,255,0.04)', border:`1px solid ${C.border}`, borderRadius:8 }}>
                 <span style={{ padding:'0 12px', color:C.textMuted }}><IconComp /></span>
-                <input value={val} onChange={e => set(e.target.value)} placeholder={placeholder}
-                  style={{ flex:1, background:'transparent', border:'none', outline:'none', color:C.textPrimary, fontSize:14, padding:'12px 12px 12px 0' }}
-                />
+                {!isApp ? (
+                  <input value={val} onChange={e => set(e.target.value)} placeholder={placeholder}
+                    style={{ flex:1, background:'transparent', border:'none', outline:'none', color:C.textPrimary, fontSize:14, padding:'12px 12px 12px 0' }}
+                  />
+                ) : (
+                  <div style={{ flex:1, display:'flex', alignItems:'center' }}>
+                    <input value={appFile ? '' : val} onChange={e => { setAppFile(null); set(e.target.value); }} placeholder={appFile ? `Selected: ${appFile.name}` : placeholder} disabled={!!appFile}
+                      style={{ flex:1, background:'transparent', border:'none', outline:'none', color:C.textPrimary, fontSize:14, padding:'12px 12px 12px 0', opacity: appFile ? 0.5 : 1 }}
+                    />
+                    <label style={{ cursor: 'pointer', padding: '6px 12px', background: C.accentSoft, color: C.accent, borderRadius: 6, fontSize: 12, fontWeight: 600, marginRight: 8, border: `1px solid rgba(108,92,231,0.2)` }}>
+                      Upload APK
+                      <input type="file" accept=".apk" onChange={e => { if(e.target.files[0]) { setAppFile(e.target.files[0]); set(''); } }} style={{ display: 'none' }} />
+                    </label>
+                    {appFile && <button onClick={() => setAppFile(null)} style={{ background: 'none', border: 'none', color: C.red, cursor: 'pointer', padding: '0 12px 0 0', fontSize: 16 }}>×</button>}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -785,7 +799,7 @@ function ScanInputPage({ onScan, loading, error }) {
             {error}
           </div>
         )}
-        <button onClick={() => onScan(websiteUrl, appUrl, repoUrl, scannerType)} disabled={loading} style={{
+        <button onClick={() => onScan(websiteUrl, appUrl, repoUrl, scannerType, appFile)} disabled={loading} style={{
           width:'100%', padding:'13px', borderRadius:8,
           background: loading ? C.textMuted : `linear-gradient(135deg, ${C.accent}, #8b7cf8)`,
           border:'none', color:'#fff', fontSize:15, fontWeight:600,
@@ -795,7 +809,7 @@ function ScanInputPage({ onScan, loading, error }) {
           {loading ? (
             <span style={{ ...flex('row','center','center',8) }}>
               <span style={{ animation:'spin 1s linear infinite', display:'inline-block' }}>⟳</span>
-              {scannerType === 'zap' ? 'ZAP Scanning... (~2 minutes)' : 'Scanning... (~30 seconds)'}
+              {scannerType === 'zap' ? 'ZAP Scanning... (~2 minutes)' : 'Processing Scan...'}
             </span>
           ) : (
             <span style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8 }}>
@@ -1261,18 +1275,24 @@ export default function App() {
     );
   }
 
-  async function handleScan(websiteUrl, appUrl, repoUrl, scannerType = 'python') {
+  async function handleScan(websiteUrl, appUrl, repoUrl, scannerType = 'python', appFile = null) {
     if (websiteUrl === null) { setResults(null); return; }
-    if (!websiteUrl && !appUrl && !repoUrl) { setError('Please enter at least one URL to scan.'); return; }
+    if (!websiteUrl && !appUrl && !repoUrl && !appFile) { setError('Please enter at least one target to scan.'); return; }
     setError('');
     setLoading(true);
     try {
-      const data = await runScan(websiteUrl, appUrl, repoUrl, scannerType, userPreferences);
-      data._target = websiteUrl || appUrl;
+      let finalAppUrl = appUrl;
+      if (appFile) {
+        const uploadRes = await uploadApk(appFile);
+        finalAppUrl = uploadRes.file_path;
+      }
+      
+      const data = await runScan(websiteUrl, finalAppUrl, repoUrl, scannerType, userPreferences);
+      data._target = websiteUrl || appUrl || (appFile ? appFile.name : 'Unknown');
       setResults(data);
       setPage('scans');
     } catch (e) {
-      setError('Scan failed. Make sure the backend is running on port 8000.');
+      setError('Scan or upload failed. Make sure the backend is running on port 8000.');
     }
     setLoading(false);
   }

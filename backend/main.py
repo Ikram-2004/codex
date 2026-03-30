@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -22,6 +22,9 @@ import crud
 import asyncio
 import json
 import time
+import tempfile
+import os
+import shutil
 from datetime import datetime
 
 app = FastAPI(title="SecurePulse API")
@@ -306,6 +309,20 @@ async def sse_events():
             "Connection": "keep-alive",
         }
     )
+
+
+@app.post("/upload/apk")
+async def upload_apk(file: UploadFile = File(...)):
+    if not file.filename.endswith(".apk"):
+        raise HTTPException(status_code=400, detail="File must be an APK")
+
+    temp_dir = tempfile.mkdtemp()
+    file_path = os.path.join(temp_dir, file.filename)
+
+    with open(file_path, "wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    return {"file_path": file_path}
 
 
 @app.post("/scan")
