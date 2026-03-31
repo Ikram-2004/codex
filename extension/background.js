@@ -2,7 +2,7 @@
 //  SecurePulse Extension — Background Service Worker
 // ═══════════════════════════════════════════════════════════════
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'https://securepulse-backend.onrender.com';
 
 // ── On Install ────────────────────────────────────────────────
 chrome.runtime.onInstalled.addListener((details) => {

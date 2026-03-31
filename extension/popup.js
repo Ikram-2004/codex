@@ -2,7 +2,7 @@
 //  SecurePulse Extension — Popup Logic
 // ═══════════════════════════════════════════════════════════════
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'https://securepulse-backend.onrender.com';
 
 // ── State ─────────────────────────────────────────────────────
 let currentUrl = '';

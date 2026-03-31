@@ -25,7 +25,7 @@
     "contextMenus"
   ],
   "host_permissions": [
-    "http://localhost:8000/*"
+    "https://securepulse-backend.onrender.com/*"
   ],
   "background": {
     "service_worker": "background.js"
