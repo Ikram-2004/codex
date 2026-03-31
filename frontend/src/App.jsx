@@ -443,7 +443,7 @@ function AIAssistant({ results, userPreferences, userId }) {
       if (userId) {
         chatBody.user_id = userId;
       }
-      const res = await fetch('http://localhost:8000/chat', {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(chatBody),
@@ -451,7 +451,7 @@ function AIAssistant({ results, userPreferences, userId }) {
       const data = await res.json();
       setMessages(m => [...m, { from: 'bot', text: data.response }]);
     } catch (e) {
-      setMessages(m => [...m, { from: 'bot', text: 'Connection error. Is the backend running on port 8000?' }]);
+      setMessages(m => [...m, { from: 'bot', text: 'Connection error. Unable to reach the backend.' }]);
     } finally {
       setIsLoading(false);
     }
@@ -1082,7 +1082,7 @@ function ThreatTerminalPage() {
   }, []);
 
   useEffect(() => {
-    const es = new EventSource('http://localhost:8000/events');
+    const es = new EventSource(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/events`);
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
     es.onmessage = (e) => {

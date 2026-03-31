@@ -42,15 +42,15 @@ app = FastAPI(title="SecurePulse API")
 #   ALLOWED_ORIGINS=https://securepulse-frontend.onrender.com,https://securepulse.io
 #
 # Falls back to localhost only if the variable is not set at all.
-raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
-allowed_origins = [origin.strip() for origin in raw_origins.split(",")]
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,https://securepulse-frontend.onrender.com")
+allowed_origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
-    allow_credentials=True,                                          # required for Authorization headers / cookies
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],       # OPTIONS must be included for preflight requests
-    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # ── Initialize database on startup ────────────────────────────
