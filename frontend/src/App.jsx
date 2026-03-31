@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { runScan, uploadApk } from './api';
+import { runScan, uploadApk, updatePreferences } from './api';
 import { generatePDFReport } from './generateReport';
 import SupportPage from './SupportPage';
 import AuthPage from './AuthPage';
@@ -1320,34 +1320,43 @@ function LogsPage({ results }) {
 // ── Root App ───────────────────────────────────────────────────
 export default function App() {
   const [hasVisitedLanding, setHasVisitedLanding] = useState(() => {
-    return !!localStorage.getItem('securepulse_user');
+    return sessionStorage.getItem('securepulse_visited_landing') === 'true';
   });
+
+  useEffect(() => {
+    if (hasVisitedLanding) sessionStorage.setItem('securepulse_visited_landing', 'true');
+    else sessionStorage.removeItem('securepulse_visited_landing');
+  }, [hasVisitedLanding]);
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('securepulse_mode');
     return saved !== null ? saved === 'dark' : true;
   });
   const [user, setUser] = useState(() => {
-    try { const s = localStorage.getItem('securepulse_user'); return s ? JSON.parse(s) : null; } catch { return null; }
+    // Clear old localStorage if present to prevent mixing
+    localStorage.removeItem('securepulse_user');
+    localStorage.removeItem('securepulse_prefs');
+    localStorage.removeItem('securepulse_page');
+    try { const s = sessionStorage.getItem('securepulse_user'); return s ? JSON.parse(s) : null; } catch { return null; }
   });
   const [userPreferences, setUserPreferences] = useState(() => {
-    try { const s = localStorage.getItem('securepulse_prefs'); return s ? JSON.parse(s) : null; } catch { return null; }
+    try { const s = sessionStorage.getItem('securepulse_prefs'); return s ? JSON.parse(s) : null; } catch { return null; }
   });
   const [page, setPage] = useState(() => {
-    return localStorage.getItem('securepulse_page') || 'dashboard';
+    return sessionStorage.getItem('securepulse_page') || 'dashboard';
   });
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Persist user session to localStorage
+  // Persist user session to sessionStorage
   useEffect(() => {
-    if (user) localStorage.setItem('securepulse_user', JSON.stringify(user));
-    else localStorage.removeItem('securepulse_user');
+    if (user) sessionStorage.setItem('securepulse_user', JSON.stringify(user));
+    else sessionStorage.removeItem('securepulse_user');
   }, [user]);
 
-  // Persist current page to localStorage
+  // Persist current page to sessionStorage
   useEffect(() => {
-    localStorage.setItem('securepulse_page', page);
+    sessionStorage.setItem('securepulse_page', page);
   }, [page]);
 
   useEffect(() => {
@@ -1364,6 +1373,10 @@ export default function App() {
     return <AuthPage onAuth={(u) => {
       setUser(u);
       setHasVisitedLanding(true);
+      if (u.preferences && Object.values(u.preferences).some(v => v !== "")) {
+        setUserPreferences(u.preferences);
+        sessionStorage.setItem('securepulse_prefs', JSON.stringify(u.preferences));
+      }
     }} />;
   }
 
@@ -1372,9 +1385,25 @@ export default function App() {
     return (
       <QuestionnairePage
         userName={user.name || user.email}
-        onComplete={(prefs) => {
+        onComplete={async (prefs) => {
+          if (user?.id) {
+            try {
+              await updatePreferences(user.id, prefs);
+            } catch (err) {
+              console.error('Failed to save preferences to backend', err);
+              if (err.response?.status === 404) {
+                 // User no longer exists in DB (stale local storage). Force logout.
+                 setUser(null);
+                 setUserPreferences(null);
+                 sessionStorage.removeItem('securepulse_user');
+                 sessionStorage.removeItem('securepulse_prefs');
+                 alert("Session expired or database reset. Please log in again.");
+                 return;
+              }
+            }
+          }
           setUserPreferences(prefs);
-          localStorage.setItem('securepulse_prefs', JSON.stringify(prefs));
+          sessionStorage.setItem('securepulse_prefs', JSON.stringify(prefs));
         }}
       />
     );
@@ -1408,9 +1437,9 @@ export default function App() {
     setResults(null);
     setPage('dashboard');
     setHasVisitedLanding(false);
-    localStorage.removeItem('securepulse_user');
-    localStorage.removeItem('securepulse_prefs');
-    localStorage.removeItem('securepulse_page');
+    sessionStorage.removeItem('securepulse_user');
+    sessionStorage.removeItem('securepulse_prefs');
+    sessionStorage.removeItem('securepulse_page');
   }
 
   const renderPage = () => {
