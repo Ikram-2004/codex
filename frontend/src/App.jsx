@@ -443,7 +443,7 @@ function AIAssistant({ results, userPreferences, userId }) {
       if (userId) {
         chatBody.user_id = userId;
       }
-      const res = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/chat`, {
+      const res = await fetch(`https://securepulse-backend.onrender.com/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(chatBody),
@@ -1082,7 +1082,7 @@ function ThreatTerminalPage() {
   }, []);
 
   useEffect(() => {
-    const es = new EventSource(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/events`);
+    const es = new EventSource(`https://securepulse-backend.onrender.com/events`);
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false);
     es.onmessage = (e) => {

@@ -11,7 +11,7 @@ import axios from 'axios';
 //
 // Vite only exposes variables prefixed with VITE_ to the browser.
 // Never put secret keys here — this value is visible in the browser.
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const BASE_URL = 'https://securepulse-backend.onrender.com';
 
 const api = axios.create({
   baseURL: BASE_URL,
