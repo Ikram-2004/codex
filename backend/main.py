@@ -29,11 +29,28 @@ from datetime import datetime
 
 app = FastAPI(title="SecurePulse API")
 
+# ── CORS ───────────────────────────────────────────────────────
+# Reads allowed origins from the ALLOWED_ORIGINS environment variable.
+#
+# Local .env:
+#   ALLOWED_ORIGINS=http://localhost:5173
+#
+# Render dashboard (after frontend is deployed):
+#   ALLOWED_ORIGINS=https://securepulse-frontend.onrender.com
+#
+# Multiple origins (e.g. Render + custom domain), comma-separated:
+#   ALLOWED_ORIGINS=https://securepulse-frontend.onrender.com,https://securepulse.io
+#
+# Falls back to localhost only if the variable is not set at all.
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173")
+allowed_origins = [origin.strip() for origin in raw_origins.split(",")]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=allowed_origins,
+    allow_credentials=True,                                          # required for Authorization headers / cookies
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],       # OPTIONS must be included for preflight requests
+    allow_headers=["Authorization", "Content-Type", "X-Requested-With"],
 )
 
 # ── Initialize database on startup ────────────────────────────
@@ -327,6 +344,16 @@ def update_profile(req: UpdateProfileRequest, db: Session = Depends(get_db)):
 @app.get("/")
 def root():
     return {"status": "SecurePulse API is running", "version": "3.0-db"}
+
+
+@app.get("/health")
+def health_check():
+    """
+    Health check endpoint for Render.
+    Render pings this route to confirm the service is alive.
+    Set healthCheckPath: /health in render.yaml.
+    """
+    return {"status": "ok"}
 
 
 @app.get("/events")

@@ -1,27 +1,47 @@
-"""
-Database Engine & Session Factory
-──────────────────────────────────
-SQLite + SQLAlchemy for zero-setup persistence.
-The .db file lives alongside the backend code.
-"""
-
+import os
+import logging
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.pool import StaticPool
+from dotenv import load_dotenv
 
-DATABASE_URL = "sqlite:///./securepulse.db"
+load_dotenv()
 
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False},   # SQLite needs this for FastAPI
-    echo=False,                                   # Set True to debug SQL queries
-)
+logger = logging.getLogger(__name__)
+
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./securepulse.db")
+
+# Render uses postgresql:// already, but this handles both just in case
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# Render injects ?sslmode=require into the URL — SQLAlchemy handles this
+# automatically, but we need to make sure we don't break it
+IS_SQLITE = DATABASE_URL.startswith("sqlite")
+
+if IS_SQLITE:
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        echo=False,
+    )
+else:
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        pool_size=5,       # Render free tier has a 97-connection limit
+        max_overflow=10,   # keep this conservative on free tier
+        echo=False,
+    )
+
+logger.info("Database: %s", "SQLite (local)" if IS_SQLITE else "PostgreSQL (Render)")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 
 def get_db():
-    """FastAPI dependency — yields a DB session, auto-closes after request."""
     db = SessionLocal()
     try:
         yield db
@@ -30,6 +50,6 @@ def get_db():
 
 
 def init_db():
-    """Create all tables if they don't exist yet."""
     from models import User, Scan, ScanFinding, Ticket, ChatHistory, Badge, UserBadge  # noqa: F401
     Base.metadata.create_all(bind=engine)
+    logger.info("Database tables initialised.")

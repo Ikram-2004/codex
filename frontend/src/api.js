@@ -1,6 +1,17 @@
 import axios from 'axios';
 
-const BASE_URL = 'http://localhost:8000';
+// ── Base URL ───────────────────────────────────────────────────
+// Reads from the VITE_API_URL environment variable at build time.
+//
+// Local development (.env):
+//   VITE_API_URL=http://localhost:8000
+//
+// Render (set in Vercel/Render dashboard before deploying frontend):
+//   VITE_API_URL=https://securepulse-backend.onrender.com
+//
+// Vite only exposes variables prefixed with VITE_ to the browser.
+// Never put secret keys here — this value is visible in the browser.
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: BASE_URL,
