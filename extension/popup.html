@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=400">
+  <link rel="stylesheet" href="popup.css">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <title>SecurePulse</title>
+</head>
+<body>
+  <div class="app">
+    <!-- ── Header ─────────────────────────────────────── -->
+    <header class="header">
+      <div class="header-left">
+        <div class="logo-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+        </div>
+        <span class="logo-text">SecurePulse</span>
+      </div>
+      <div class="header-right">
+        <div class="status-dot" id="status-dot"></div>
+        <span class="status-label" id="status-label">Ready</span>
+      </div>
+    </header>
+
+    <!-- ── Auth Section (shown when not logged in) ──── -->
+    <div id="auth-section" class="section auth-section hidden">
+      <div class="auth-card">
+        <div class="auth-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+          </svg>
+        </div>
+        <h3>Sign in to SecurePulse</h3>
+        <p class="auth-desc">Login to save scan history and track your security posture</p>
+        <input type="email" id="auth-email" placeholder="Email address" class="input" />
+        <input type="password" id="auth-password" placeholder="Password" class="input" />
+        <button id="auth-login-btn" class="btn btn-primary btn-full">Sign In</button>
+        <div id="auth-error" class="auth-error hidden"></div>
+        <button id="auth-skip-btn" class="btn btn-ghost btn-full">Continue as Guest</button>
+      </div>
+    </div>
+
+    <!-- ── User Badge (shown when logged in) ─────────── -->
+    <div id="user-badge" class="user-badge hidden">
+      <div class="user-avatar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+        </svg>
+      </div>
+      <div class="user-info">
+        <span class="user-name" id="user-name">User</span>
+        <span class="user-email" id="user-email">user@email.com</span>
+      </div>
+      <button id="logout-btn" class="btn-icon" title="Log out">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- ── Current URL Display ────────────────────────── -->
+    <div id="url-section" class="section">
+      <div class="url-card">
+        <div class="url-label">Current Page</div>
+        <div class="url-display" id="current-url">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+          </svg>
+          <span id="url-text">Detecting...</span>
+        </div>
+        <button id="scan-btn" class="btn btn-primary btn-full scan-btn">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/><path d="M11 8v6M8 11h6"/>
+          </svg>
+          Scan This Page
+        </button>
+      </div>
+    </div>
+
+    <!-- ── Loading State ──────────────────────────────── -->
+    <div id="loading-section" class="section hidden">
+      <div class="loading-card">
+        <div class="scanner-animation">
+          <div class="scanner-ring ring-1"></div>
+          <div class="scanner-ring ring-2"></div>
+          <div class="scanner-ring ring-3"></div>
+          <div class="scanner-core">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+          </div>
+        </div>
+        <h3 class="loading-title">Scanning in progress...</h3>
+        <p class="loading-desc" id="loading-desc">Analyzing security headers, SSL, and vulnerabilities</p>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill"></div>
+        </div>
+        <div class="scan-steps" id="scan-steps">
+          <div class="scan-step active" id="step-headers">
+            <div class="step-dot"></div>
+            <span>Checking security headers</span>
+          </div>
+          <div class="scan-step" id="step-ssl">
+            <div class="step-dot"></div>
+            <span>Analyzing SSL/TLS</span>
+          </div>
+          <div class="scan-step" id="step-vulns">
+            <div class="step-dot"></div>
+            <span>Detecting vulnerabilities</span>
+          </div>
+          <div class="scan-step" id="step-score">
+            <div class="step-dot"></div>
+            <span>Calculating score</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Results Section ────────────────────────────── -->
+    <div id="results-section" class="section hidden">
+      <!-- Score Card -->
+      <div class="result-score-card" id="score-card">
+        <div class="score-left">
+          <div class="grade-badge" id="grade-badge">A</div>
+          <div class="score-details">
+            <div class="score-number"><span id="score-value">85</span><span class="score-max">/100</span></div>
+            <div class="score-label" id="score-message">Good security posture</div>
+          </div>
+        </div>
+        <div class="score-bar-wrap">
+          <div class="score-bar">
+            <div class="score-bar-fill" id="score-bar-fill"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Severity Summary -->
+      <div class="severity-summary" id="severity-summary">
+        <div class="severity-chip sev-critical">
+          <span class="sev-count" id="count-critical">0</span>
+          <span class="sev-label">Critical</span>
+        </div>
+        <div class="severity-chip sev-high">
+          <span class="sev-count" id="count-high">0</span>
+          <span class="sev-label">High</span>
+        </div>
+        <div class="severity-chip sev-medium">
+          <span class="sev-count" id="count-medium">0</span>
+          <span class="sev-label">Medium</span>
+        </div>
+        <div class="severity-chip sev-pass">
+          <span class="sev-count" id="count-pass">0</span>
+          <span class="sev-label">Passed</span>
+        </div>
+      </div>
+
+      <!-- Findings List -->
+      <div class="findings-section">
+        <div class="findings-header">
+          <h3>Findings</h3>
+          <button class="btn btn-ghost btn-sm" id="toggle-findings">Show All</button>
+        </div>
+        <div class="findings-list" id="findings-list">
+          <!-- Populated by JS -->
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="action-buttons">
+        <button class="btn btn-secondary btn-full" id="rescan-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+          Scan Again
+        </button>
+        <a href="http://localhost:5173" target="_blank" class="btn btn-ghost btn-full open-dashboard">
+          Open Full Dashboard →
+        </a>
+      </div>
+    </div>
+
+    <!-- ── Error Section ──────────────────────────────── -->
+    <div id="error-section" class="section hidden">
+      <div class="error-card">
+        <div class="error-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <h3>Connection Error</h3>
+        <p id="error-message">Unable to reach SecurePulse backend. Make sure the server is running on port 8000.</p>
+        <button class="btn btn-primary btn-full" id="retry-btn">Try Again</button>
+      </div>
+    </div>
+
+    <!-- ── Footer ─────────────────────────────────────── -->
+    <footer class="footer">
+      <span>SecurePulse v1.0</span>
+      <span class="footer-dot">·</span>
+      <a href="http://localhost:5173" target="_blank">Dashboard</a>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
